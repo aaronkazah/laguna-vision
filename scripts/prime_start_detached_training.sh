@@ -97,6 +97,7 @@ ssh "${SSH_OPTS[@]}" "${PRIME_SSH_TARGET}" "bash -lc '
   export FEATURE_CACHE_DIR=\"${FEATURE_CACHE_DIR:-${LAGUNA_VLM_ROOT}/feature_cache/siglip-so400m-patch14-384-tiles${MAX_TILES:-1}}\"
   export OUTPUT_DIR=\"${OUTPUT_DIR:-${LAGUNA_VLM_ROOT}/checkpoints/${RUN_NAME}}\"
   export INIT_CHECKPOINT=\"${INIT_CHECKPOINT:-}\"
+  export INIT_LORA_DIR=\"${INIT_LORA_DIR:-}\"
   export HF_HOME=\"${REMOTE_HF_HOME}\"
   export PUBLISH_ON_EXIT=\"${PUBLISH_ON_EXIT:-1}\"
   export PUBLISH_DURING_RUN=\"${PUBLISH_DURING_RUN:-1}\"
