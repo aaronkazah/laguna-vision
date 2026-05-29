@@ -28,6 +28,7 @@ frozen language backbone
 | Visual-token injection via frozen-backbone input embeddings | implemented |
 | Interactive image QA from a saved checkpoint (`ask-image`) | implemented |
 | Checkpoint save/load/eval, warm-start, and step checkpoints | implemented |
+| Direct private Hugging Face checkpoint loading (`hf://...`) | implemented |
 | Leakage-controlled five-arm ablation eval | implemented |
 | Multi-GPU data-parallel training (torchrun) | implemented |
 | Prime persistent-disk production scripts | implemented |
@@ -171,10 +172,10 @@ python -m pip install -U pip
 python -m pip install -e '.[dev,data,llama]'
 ```
 
-For the official Meta checkpoint, authenticate Hugging Face before training:
+For gated model checkpoints and private checkpoint uploads/downloads, authenticate Hugging Face before training:
 
 ```bash
-huggingface-cli login
+hf auth login
 ```
 
 Materialize a small real HF train/eval split:
@@ -242,6 +243,20 @@ PYTORCH_ENABLE_MPS_FALLBACK=1 laguna-vision ask-image \
 ```
 
 For a named registry checkpoint, add `--backbone llama` or `--backbone laguna`. If the checkpoint was trained with LoRA, `ask-image` loads the adapter from the sibling `lora/` directory automatically.
+
+You can also load a private Hugging Face checkpoint directly:
+
+```bash
+laguna-vision ask-image \
+  --checkpoint hf://your-org/laguna-vision-early/step_000250 \
+  --image path/to/image.png \
+  --question "Explain this image." \
+  --backbone laguna \
+  --device cuda \
+  --vision-device cuda
+```
+
+`hf://owner/repo/path` downloads `projector.pt`, `projector_spec.json`, `train_report.json`, optional `lora/`, and eval artifacts from the model repo cache. The short form `owner/repo:path` is also accepted.
 
 Inspect artifacts:
 
@@ -341,7 +356,7 @@ Early and final checkpoints can be stored in private Hugging Face Hub model repo
 
 ```bash
 python -m pip install -e '.[publish]'
-huggingface-cli login
+hf auth login
 
 HF_REPO_ID=your-org/laguna-vision-early \
 CHECKPOINT_DIR=/mnt/prime/laguna-vlm/checkpoints/laguna_stage2_instruction/step_000250 \
@@ -350,6 +365,29 @@ scripts/publish_hf_checkpoint.sh
 ```
 
 The script uploads the checkpoint directory (`projector.pt`, `projector_spec.json`, `train_report.json`, optional `lora/`, and eval artifacts) under a path named after the checkpoint directory. Publish raw training data to a Hugging Face dataset repo only when the dataset license allows redistribution; otherwise publish the exact materialization commands, source dataset names, manifest schemas, and eval outputs.
+
+### Smoke before spending GPU budget
+
+Run a cheap local smoke before launching Prime. It uses a tiny HF backbone, so the text is nonsense, but it proves data generation, bridge training, checkpoint reload, image inference, and ablation execution:
+
+```bash
+source venv/bin/activate
+scripts/local_smoke_train.sh
+```
+
+For a detached Prime run that keeps going after the laptop disconnects, first create a pod with a mounted persistent disk and copy/materialize data under `LAGUNA_VLM_ROOT`, then launch:
+
+```bash
+export PRIME_SSH_TARGET=ubuntu@<pod-ip>
+export LAGUNA_VLM_ROOT=/mnt/prime/laguna-vlm
+export MAX_RUNTIME=9h
+export STAGE1_MAX_ITEMS=300000
+export STAGE2_MAX_ITEMS=150000
+
+scripts/prime_start_detached_training.sh
+```
+
+`MAX_RUNTIME` stops the training job, not Prime billing. To auto-clean compute, install/authenticate `prime` inside the pod and launch with `TERMINATE_ON_EXIT=1 PRIME_POD_ID=<pod-id>`. Without that, verify and terminate manually after checkpoints are safely on the persistent disk.
 
 ## Verified validation runs
 

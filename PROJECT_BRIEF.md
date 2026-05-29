@@ -52,7 +52,7 @@ Do not publish these to GitHub:
 |---|---|
 | raw training data | regenerate from licensed public sources or publish to HF Dataset only if redistribution is allowed |
 | model weights/checkpoints | private Hugging Face model repo or GitHub Release only after license/safety review |
-| Prime/HF/GitHub tokens | local keychain, `huggingface-cli login`, GitHub Actions secrets, or Prime CLI auth |
+| Prime/HF/GitHub tokens | local keychain, `hf auth login`, GitHub Actions secrets, or Prime CLI auth |
 | large feature caches | Prime persistent disk or object storage |
 
 ## Hugging Face convention
@@ -66,14 +66,24 @@ Use Hugging Face Hub for artifacts that are too large or too sensitive for GitHu
 | eval dataset manifests | GitHub if small and license-safe; HF Dataset if large |
 | raw images | HF Dataset only if source license allows redistribution |
 
-Login only on the machine that publishes:
+Login only on the machine that publishes or downloads private checkpoints:
 
 ```bash
-huggingface-cli login
+hf auth login
 HF_REPO_ID=your-org/laguna-vision-early \
 CHECKPOINT_DIR=/mnt/prime/laguna-vlm/checkpoints/laguna_stage2_instruction/step_000250 \
 HF_PRIVATE=1 \
 scripts/publish_hf_checkpoint.sh
+```
+
+Private checkpoints can be used directly at inference time:
+
+```bash
+laguna-vision ask-image \
+  --checkpoint hf://your-org/laguna-vision-early/step_000250 \
+  --image path/to/image.png \
+  --question "Explain this image." \
+  --backbone laguna
 ```
 
 For CI/CD publishing, store `HF_TOKEN` as a GitHub Actions secret. Never commit tokens.
@@ -85,7 +95,7 @@ For CI/CD publishing, store `HF_TOKEN` as a GitHub Actions secret. Never commit 
 | GitHub repo access to `aaronkazah/laguna-vision` | push the clean project history and enable CI |
 | Decision: public vs private repo | determines whether docs mention unreleased model artifacts |
 | Hugging Face org/repo names | where early and final checkpoints will live |
-| HF write token or local `huggingface-cli login` on the publishing machine | required only when uploading checkpoints |
+| HF write token or local `hf auth login` on the publishing machine | required for uploading private checkpoints; read auth is required for private inference |
 | HF model-gated access approvals | required for gated backbones such as Llama and possibly Laguna |
 | Prime CLI auth and SSH key | required only when launching GPU pods |
 | Prime budget ceiling and spot tolerance | determines whether to use 8xB300 spot, B300 on-demand, or H200 |
@@ -114,6 +124,23 @@ scripts/laguna_llava_stage2.sh
 
 The scripts require a persistent Prime disk. Do not train directly onto a disposable pod root disk.
 
+Run the local smoke before paying for GPUs:
+
+```bash
+scripts/local_smoke_train.sh
+```
+
+Then start a detached Prime run from a mounted persistent disk:
+
+```bash
+PRIME_SSH_TARGET=ubuntu@<pod-ip> \
+LAGUNA_VLM_ROOT=/mnt/prime/laguna-vlm \
+MAX_RUNTIME=9h \
+scripts/prime_start_detached_training.sh
+```
+
+This survives laptop disconnects. `MAX_RUNTIME` stops training, but pod billing only stops automatically if the pod can run `prime pods terminate` with `TERMINATE_ON_EXIT=1 PRIME_POD_ID=<pod-id>`.
+
 ## Current budget recommendation
 
 For a capped first milestone around `$200`, use 8xB300 spot when available and checkpoint aggressively. At `$21/hr`, it buys roughly 9.5 hours before storage/API overhead. That is enough for a serious early milestone, not a guaranteed complete general VLM.
@@ -132,4 +159,3 @@ A checkpoint is not considered generally useful because one uploaded image works
 | OCR/document/chart | text-rich eval improves |
 | screenshot eval | fresh web/developer screenshots are plausible and grounded |
 | artifact persistence | checkpoint, LoRA adapter, spec, report, and eval outputs are saved to persistent storage |
-

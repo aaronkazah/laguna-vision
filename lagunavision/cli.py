@@ -18,6 +18,7 @@ from lagunavision.eval.scene_probe import generate_scene_probe
 from lagunavision.eval.scene_probe import generate_scene_dataset
 from lagunavision.eval.score_eval import score_answer
 from lagunavision.eval.web_probe import generate_web_probe
+from lagunavision.hub import resolve_checkpoint_reference
 from lagunavision.model import LagunaVisionTextPipeline
 from lagunavision.positions.normalized_2d import Normalized2DPositionEncoder
 from lagunavision.projectors.features import stack_visual_features
@@ -146,7 +147,7 @@ def main() -> None:
     train_bridge.add_argument("--num-workers", type=int, default=0)
     train_bridge.add_argument("--save-every", type=int, default=0)
     train_bridge.add_argument("--feature-cache-dir", type=Path)
-    train_bridge.add_argument("--init-checkpoint", type=Path)
+    train_bridge.add_argument("--init-checkpoint")
     train_bridge.add_argument("--init-lora-dir", type=Path)
     train_bridge.add_argument("--no-grad-checkpointing", dest="grad_checkpointing", action="store_false")
     train_bridge.add_argument("--lora-rank", type=int, default=0)
@@ -159,7 +160,7 @@ def main() -> None:
 
     ask_image = subcommands.add_parser("ask-image")
     ask_image.add_argument("--image", type=Path, required=True)
-    ask_image.add_argument("--checkpoint", type=Path, required=True)
+    ask_image.add_argument("--checkpoint", required=True)
     ask_image.add_argument("--question", required=True)
     ask_image.add_argument("--backbone", choices=available_backbones(), default="")
     ask_image.add_argument("--model-id", default="")
@@ -169,7 +170,7 @@ def main() -> None:
 
     ablation = subcommands.add_parser("eval-ablation")
     ablation.add_argument("--manifest", type=Path, required=True)
-    ablation.add_argument("--checkpoint", type=Path, required=True)
+    ablation.add_argument("--checkpoint", required=True)
     ablation.add_argument("--output", type=Path, required=True)
     ablation.add_argument("--backbone", choices=available_backbones(), default="")
     ablation.add_argument("--model-id", default="")
@@ -396,7 +397,7 @@ def _train_visual_bridge(args: argparse.Namespace) -> None:
                 num_workers=args.num_workers,
                 save_every=args.save_every,
                 feature_cache_dir=args.feature_cache_dir,
-                init_checkpoint=args.init_checkpoint,
+                init_checkpoint=resolve_checkpoint_reference(args.init_checkpoint) if args.init_checkpoint else None,
                 init_lora_dir=args.init_lora_dir,
                 grad_checkpointing=args.grad_checkpointing,
                 lora_rank=args.lora_rank,
@@ -435,15 +436,16 @@ def _lora_dir(checkpoint: Path, spec_row: dict) -> Path | None:
 
 def _ask_image(args: argparse.Namespace) -> None:
     async def run() -> None:
-        spec, spec_row = _load_projector_spec(args.checkpoint)
+        checkpoint = resolve_checkpoint_reference(args.checkpoint)
+        spec, spec_row = _load_projector_spec(checkpoint)
         pipeline = await LagunaVisionImagePipeline.from_checkpoint(
-            checkpoint=args.checkpoint,
+            checkpoint=checkpoint,
             spec=spec,
             backbone_name=args.backbone or spec_row.get("backbone", "laguna"),
             model_id=args.model_id or spec_row["model_id"],
             device=args.device,
             vision_device=args.vision_device,
-            lora_dir=_lora_dir(args.checkpoint, spec_row),
+            lora_dir=_lora_dir(checkpoint, spec_row),
         )
         print(await pipeline.answer_image(args.image, args.question))
 
@@ -452,11 +454,12 @@ def _ask_image(args: argparse.Namespace) -> None:
 
 def _eval_ablation(args: argparse.Namespace) -> None:
     async def run() -> None:
-        spec, spec_row = _load_projector_spec(args.checkpoint)
+        checkpoint = resolve_checkpoint_reference(args.checkpoint)
+        spec, spec_row = _load_projector_spec(checkpoint)
         summary = await run_ablation(
             AblationConfig(
                 manifest=args.manifest,
-                checkpoint=args.checkpoint,
+                checkpoint=checkpoint,
                 output=args.output,
                 spec=spec,
                 backbone_name=args.backbone or spec_row.get("backbone", "laguna"),
@@ -465,7 +468,7 @@ def _eval_ablation(args: argparse.Namespace) -> None:
                 vision_device=args.vision_device,
                 limit=args.limit,
                 capability_threshold=args.threshold,
-                lora_dir=_lora_dir(args.checkpoint, spec_row),
+                lora_dir=_lora_dir(checkpoint, spec_row),
             )
         )
         print(json.dumps(summary, indent=2))
