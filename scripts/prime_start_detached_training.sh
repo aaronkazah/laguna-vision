@@ -14,13 +14,13 @@ SSH_OPTS=(-i "${SSH_KEY}" -o StrictHostKeyChecking=accept-new)
 
 rsync -az \
   -e "ssh ${SSH_OPTS[*]}" \
-  --exclude .git \
-  --exclude .smoke \
-  --exclude data \
-  --exclude checkpoints \
-  --exclude outputs \
-  --exclude runs \
-  --exclude venv \
+  --exclude /.git \
+  --exclude /.smoke \
+  --exclude /data \
+  --exclude /checkpoints \
+  --exclude /outputs \
+  --exclude /runs \
+  --exclude /venv \
   ./ "${PRIME_SSH_TARGET}:${REMOTE_REPO_DIR}/"
 
 ssh "${SSH_OPTS[@]}" "${PRIME_SSH_TARGET}" "mkdir -p '${REMOTE_HF_HOME}' && chmod 700 '${REMOTE_HF_HOME}'"
