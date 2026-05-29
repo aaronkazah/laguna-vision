@@ -129,7 +129,7 @@ Load it directly for inference:
 
 ```bash
 laguna-vision ask-image \
-  --checkpoint hf://your-org/laguna-vision/step_000250 \
+  --checkpoint hf://your-org/laguna-vision/latest \
   --image path/to/image.png \
   --question "Explain this image." \
   --backbone laguna \

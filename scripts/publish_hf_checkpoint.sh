@@ -40,7 +40,13 @@ api.upload_folder(
     folder_path=str(checkpoint_dir),
     path_in_repo=path_in_repo,
     revision=revision,
-    ignore_patterns=["*.tmp", "__pycache__/*", ".DS_Store"],
+    allow_patterns=[
+        "projector.pt",
+        "projector_spec.json",
+        "train_report.json",
+        "lora/adapter_config.json",
+        "lora/adapter_model.safetensors",
+    ],
 )
 print({"repo_id": repo_id, "path_in_repo": path_in_repo, "private": private, "revision": revision})
 PY
