@@ -165,13 +165,13 @@ export INIT_CHECKPOINT=hf://your-org/laguna-vision/laguna-vision-b300-20260529/s
 scripts/prime_start_detached_training.sh
 ```
 
-Recommended first run:
+Recommended remote GPU baseline:
 
 | Resource | Value |
 |---|---|
 | GPU | 8x B300 262GB spot |
-| Budget window | 8 hours |
-| Training rows | 30k train / 1k eval |
+| Budget window | 4-8 hours |
+| Dataset size | 30k train / 1k eval or larger |
 | Vision tower | `google/siglip-so400m-patch14-384` |
 | Checkpoint cadence | every 50 optimizer steps |
 

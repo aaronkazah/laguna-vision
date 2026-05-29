@@ -59,7 +59,9 @@ def _materialize_hf_dataset_streaming(
     train_written = 0
     eval_written = 0
 
-    with train_manifest.open("w", encoding="utf-8") as train_handle, eval_manifest.open("w", encoding="utf-8") as eval_handle:
+    with train_manifest.open("w", encoding="utf-8", buffering=1) as train_handle, eval_manifest.open(
+        "w", encoding="utf-8", buffering=1
+    ) as eval_handle:
         for dataset_index, request in enumerate(datasets):
             rows = hf_datasets.load_dataset(
                 request.dataset,
@@ -93,6 +95,7 @@ def _materialize_hf_dataset_streaming(
                     "source_dataset": request.dataset,
                 }
                 handle.write(json.dumps(manifest_row, sort_keys=True) + "\n")
+                handle.flush()
                 if split == "train":
                     dataset_train_written += 1
                     train_written += 1
