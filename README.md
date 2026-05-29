@@ -151,11 +151,12 @@ export TRAIN_COUNT=30000
 export EVAL_COUNT=1000
 export HF_REPO_ID=your-org/laguna-vision
 export PUBLISH_ON_EXIT=1
+export PUBLISH_DURING_RUN=1
 
 scripts/prime_start_detached_training.sh
 ```
 
-The launcher copies the repo to the pod, installs it there, and starts the training process with `nohup`. The job continues if the laptop disconnects. `MAX_RUNTIME` stops the training process; Prime billing stops when the pod is terminated.
+The launcher copies the repo to the pod, installs it there, and starts the training process with `nohup`. The job continues if the laptop disconnects. With `HF_REPO_ID` set, checkpoint directories are uploaded to Hugging Face during training and again at exit. `MAX_RUNTIME` stops the training process; Prime billing stops when the pod is terminated.
 
 Recommended first run:
 
@@ -165,7 +166,7 @@ Recommended first run:
 | Budget window | 8 hours |
 | Training rows | 30k train / 1k eval |
 | Vision tower | `google/siglip-so400m-patch14-384` |
-| Checkpoint cadence | every 250 optimizer steps |
+| Checkpoint cadence | every 50 optimizer steps |
 
 ## Repository layout
 

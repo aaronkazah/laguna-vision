@@ -23,6 +23,9 @@ OUTPUT_DIR="${OUTPUT_DIR:-${LAGUNA_VLM_ROOT}/checkpoints/${RUN_NAME}}"
 LOG_DIR="${LOG_DIR:-${LAGUNA_VLM_ROOT}/logs/${RUN_NAME}}"
 CLI="${LAGUNA_VISION_CLI:-laguna-vision}"
 HF_HOME="${HF_HOME:-${LAGUNA_VLM_ROOT}/hf_home}"
+PUBLISH_ON_EXIT="${PUBLISH_ON_EXIT:-1}"
+PUBLISH_DURING_RUN="${PUBLISH_DURING_RUN:-1}"
+HF_PUBLISH_INTERVAL="${HF_PUBLISH_INTERVAL:-300}"
 export HF_HOME
 
 mkdir -p "${LOG_DIR}" "${OUTPUT_DIR}" "${FEATURE_CACHE_DIR}"
@@ -40,9 +43,46 @@ echo "visual_tokens=${VISUAL_TOKENS}"
 echo "output_dir=${OUTPUT_DIR}"
 echo "feature_cache_dir=${FEATURE_CACHE_DIR}"
 echo "hf_home=${HF_HOME}"
+echo "publish_during_run=${PUBLISH_DURING_RUN}"
+
+publish_checkpoint() {
+  local checkpoint_dir="$1"
+  [[ "${HF_REPO_ID:-}" != "" ]] || return 0
+  [[ -f "${checkpoint_dir}/projector.pt" ]] || return 0
+  [[ -f "${checkpoint_dir}/projector_spec.json" ]] || return 0
+  [[ -f "${checkpoint_dir}/train_report.json" ]] || return 0
+
+  CHECKPOINT_DIR="${checkpoint_dir}" \
+    HF_PRIVATE="${HF_PRIVATE:-1}" \
+    PATH_IN_REPO="${HF_PATH_IN_REPO:-${RUN_NAME}}/$(basename "${checkpoint_dir}")" \
+    scripts/publish_hf_checkpoint.sh
+}
+
+publish_new_checkpoints() {
+  local watched_pid="$1"
+  local published_dir="${LOG_DIR}/published_hf"
+  mkdir -p "${published_dir}"
+
+  while kill -0 "${watched_pid}" >/dev/null 2>&1; do
+    for checkpoint_dir in "${OUTPUT_DIR}"/step_*; do
+      [[ -d "${checkpoint_dir}" ]] || continue
+      marker="${published_dir}/$(basename "${checkpoint_dir}")"
+      [[ ! -f "${marker}" ]] || continue
+      publish_checkpoint "${checkpoint_dir}" && touch "${marker}"
+    done
+    sleep "${HF_PUBLISH_INTERVAL}"
+  done
+
+  for checkpoint_dir in "${OUTPUT_DIR}"/step_*; do
+    [[ -d "${checkpoint_dir}" ]] || continue
+    marker="${published_dir}/$(basename "${checkpoint_dir}")"
+    [[ ! -f "${marker}" ]] || continue
+    publish_checkpoint "${checkpoint_dir}" && touch "${marker}"
+  done
+}
 
 publish_latest_checkpoint() {
-  [[ "${HF_REPO_ID:-}" != "" && "${PUBLISH_ON_EXIT:-0}" == "1" ]] || return 0
+  [[ "${PUBLISH_ON_EXIT}" == "1" ]] || return 0
 
   latest="$(find "${OUTPUT_DIR}" -maxdepth 1 -type d -name 'step_*' 2>/dev/null | sort | tail -1 || true)"
   if [[ -z "${latest}" && -f "${OUTPUT_DIR}/projector.pt" ]]; then
@@ -50,10 +90,7 @@ publish_latest_checkpoint() {
   fi
   [[ -n "${latest}" ]] || return 0
 
-  CHECKPOINT_DIR="${latest}" \
-    HF_PRIVATE="${HF_PRIVATE:-1}" \
-    PATH_IN_REPO="${HF_PATH_IN_REPO:-${RUN_NAME}/$(basename "${latest}")}" \
-    scripts/publish_hf_checkpoint.sh || true
+  publish_checkpoint "${latest}" || true
 }
 
 terminate_on_exit() {
@@ -126,4 +163,19 @@ timeout "${MAX_RUNTIME}" bash -lc '
       --device cuda \
       --vision-device cuda
   fi
-'
+' &
+run_pid=$!
+publisher_pid=""
+if [[ "${PUBLISH_DURING_RUN}" == "1" && -n "${HF_REPO_ID:-}" ]]; then
+  publish_new_checkpoints "${run_pid}" &
+  publisher_pid=$!
+fi
+
+set +e
+wait "${run_pid}"
+run_status=$?
+if [[ -n "${publisher_pid}" ]]; then
+  wait "${publisher_pid}" || true
+fi
+set -e
+exit "${run_status}"
