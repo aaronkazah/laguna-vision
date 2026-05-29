@@ -1,0 +1,16 @@
+{
+  "backbone": {
+    "hf_id": "meta-llama/Llama-3.2-3B-Instruct",
+    "mode": "text_only"
+  },
+  "tiling": {
+    "include_global": true,
+    "tile_px": 384,
+    "max_tiles": 9,
+    "grids": [[1, 1], [1, 2], [2, 1], [2, 2], [1, 3], [3, 1], [3, 3]]
+  },
+  "eval": {
+    "pass_threshold": 2,
+    "items": 15
+  }
+}

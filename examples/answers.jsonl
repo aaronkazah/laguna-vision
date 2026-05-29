@@ -1,0 +1,1 @@
+{"id":"py_missing_package_001","answer":"The screenshot shows ModuleNotFoundError for requests because the dependency is missing. Install it with python -m pip install requests."}

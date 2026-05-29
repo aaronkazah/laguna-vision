@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.eggs/
+*.egg-info/
+.venv/
+venv/
+
+# Node / frontend tooling
+node_modules/
+dist/
+build/
+
+# Training outputs
+checkpoints/
+outputs/
+runs/
+wandb/
+*.safetensors
+*.bin
+*.pt
+*.pth
+
+# Local data and secrets
+/data/
+/eval/images/
+/eval/outputs/
+.env
+.env.*
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
