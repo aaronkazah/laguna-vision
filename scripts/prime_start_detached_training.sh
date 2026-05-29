@@ -73,6 +73,8 @@ ssh "${SSH_OPTS[@]}" "${PRIME_SSH_TARGET}" "bash -lc '
   export PUBLISH_ON_EXIT=\"${PUBLISH_ON_EXIT:-1}\"
   export PUBLISH_DURING_RUN=\"${PUBLISH_DURING_RUN:-1}\"
   export HF_PUBLISH_INTERVAL=\"${HF_PUBLISH_INTERVAL:-300}\"
+  export HF_UPDATE_LATEST=\"${HF_UPDATE_LATEST:-1}\"
+  export HF_LATEST_PATH_IN_REPO=\"${HF_LATEST_PATH_IN_REPO:-latest}\"
   export HF_REPO_ID=\"${HF_REPO_ID:-}\"
   export HF_PRIVATE=\"${HF_PRIVATE:-1}\"
   export HF_PATH_IN_REPO=\"${HF_PATH_IN_REPO:-${RUN_NAME}}\"

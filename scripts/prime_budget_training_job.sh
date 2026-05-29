@@ -28,6 +28,8 @@ HF_HOME="${HF_HOME:-${LAGUNA_VLM_ROOT}/hf_home}"
 PUBLISH_ON_EXIT="${PUBLISH_ON_EXIT:-1}"
 PUBLISH_DURING_RUN="${PUBLISH_DURING_RUN:-1}"
 HF_PUBLISH_INTERVAL="${HF_PUBLISH_INTERVAL:-300}"
+HF_UPDATE_LATEST="${HF_UPDATE_LATEST:-1}"
+HF_LATEST_PATH_IN_REPO="${HF_LATEST_PATH_IN_REPO:-latest}"
 export BATCH_SIZE CLI DATA_DIR EVAL_COUNT EVAL_LIMIT EVAL_MANIFEST FEATURE_CACHE_DIR GRAD_ACCUM HF_HOME INIT_CHECKPOINT
 export MAX_ITEMS MAX_TILES MODEL_ID NPROC OUTPUT_DIR RUN_NAME SAVE_EVERY TRAIN_COUNT TRAIN_MANIFEST VISION_TOWER VISUAL_TOKENS
 
@@ -50,6 +52,7 @@ echo "feature_cache_dir=${FEATURE_CACHE_DIR}"
 echo "hf_home=${HF_HOME}"
 echo "init_checkpoint=${INIT_CHECKPOINT:-}"
 echo "publish_during_run=${PUBLISH_DURING_RUN}"
+echo "hf_update_latest=${HF_UPDATE_LATEST}"
 
 publish_checkpoint() {
   local checkpoint_dir="$1"
@@ -62,6 +65,14 @@ publish_checkpoint() {
     HF_PRIVATE="${HF_PRIVATE:-1}" \
     PATH_IN_REPO="${HF_PATH_IN_REPO:-${RUN_NAME}}/$(basename "${checkpoint_dir}")" \
     scripts/publish_hf_checkpoint.sh
+
+  if [[ "${HF_UPDATE_LATEST}" == "1" ]]; then
+    CHECKPOINT_DIR="${checkpoint_dir}" \
+      HF_PRIVATE="${HF_PRIVATE:-1}" \
+      HF_REPLACE_PATH=1 \
+      PATH_IN_REPO="${HF_LATEST_PATH_IN_REPO}" \
+      scripts/publish_hf_checkpoint.sh
+  fi
 }
 
 publish_new_checkpoints() {
