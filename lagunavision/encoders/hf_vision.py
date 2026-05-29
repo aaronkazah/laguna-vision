@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -37,12 +38,60 @@ class HfVisionEncoder:
 
         resolved_device = resolve_torch_device(self.device)
         self._processor = AutoImageProcessor.from_pretrained(self.model_id)
-        self._model = AutoModel.from_pretrained(self.model_id)
+        if self._is_siglip_model():
+            self._model = self._load_siglip_vision_model()
+        else:
+            self._model = AutoModel.from_pretrained(self.model_id)
         self._model.eval()
         self._model.to(resolved_device)
         self.device = resolved_device
         for parameter in self._model.parameters():
             parameter.requires_grad_(False)
+
+    def _is_siglip_model(self) -> bool:
+        return "siglip" in self.model_id.casefold()
+
+    def _load_siglip_vision_model(self) -> Any:
+        from transformers import SiglipVisionConfig, SiglipVisionModel
+
+        vision_config = self._load_siglip_vision_config(SiglipVisionConfig)
+        try:
+            from transformers.utils import logging as transformers_logging
+        except ImportError:
+            transformers_logging = None
+
+        # The full SigLIP config includes text-token ids that are invalid for
+        # generation configs, but this encoder only needs the vision tower.
+        # Loading the vision sub-config directly avoids the misleading token-id
+        # warning; muting this scoped load also hides expected unused text-tower
+        # checkpoint keys from the full SigLIP checkpoint.
+        if transformers_logging is None:
+            return SiglipVisionModel.from_pretrained(self.model_id, config=vision_config)
+        verbosity = transformers_logging.get_verbosity()
+        transformers_logging.set_verbosity_error()
+        try:
+            return SiglipVisionModel.from_pretrained(self.model_id, config=vision_config)
+        finally:
+            transformers_logging.set_verbosity(verbosity)
+
+    def _load_siglip_vision_config(self, vision_config_cls: Any) -> Any:
+        config_path = self._config_file_path()
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        vision_config = config.get("vision_config")
+        if not isinstance(vision_config, dict):
+            raise RuntimeError(f"{self.model_id} does not include a SigLIP vision_config")
+        return vision_config_cls(**vision_config)
+
+    def _config_file_path(self) -> Path:
+        model_path = Path(self.model_id)
+        if model_path.is_file():
+            return model_path
+        if model_path.is_dir() and (model_path / "config.json").is_file():
+            return model_path / "config.json"
+
+        from huggingface_hub import hf_hub_download
+
+        return Path(hf_hub_download(repo_id=self.model_id, filename="config.json"))
 
     def _encode_sync(self, image: Path, tiles: tuple[Tile, ...]) -> tuple[EncodedTile, ...]:
         if self._processor is None or self._model is None:
