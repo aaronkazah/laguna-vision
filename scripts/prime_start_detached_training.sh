@@ -10,6 +10,7 @@ REMOTE_REPO_DIR="${REMOTE_REPO_DIR:-~/laguna-vision}"
 MAX_RUNTIME="${MAX_RUNTIME:-8h}"
 RUN_NAME="${RUN_NAME:-laguna-vision-$(date -u +%Y%m%dT%H%M%SZ)}"
 REMOTE_HF_HOME="${HF_HOME:-${LAGUNA_VLM_ROOT}/hf_home}"
+PRIME_CONFIG_FILE="${PRIME_CONFIG_FILE:-${HOME}/.prime/config.json}"
 SSH_OPTS=(-i "${SSH_KEY}" -o StrictHostKeyChecking=accept-new)
 
 rsync -az \
@@ -34,6 +35,15 @@ elif [[ -f "${HF_TOKEN_FILE:-${HOME}/.cache/huggingface/token}" ]]; then
   ssh "${SSH_OPTS[@]}" "${PRIME_SSH_TARGET}" "chmod 600 '${REMOTE_HF_HOME}/token'"
 fi
 
+if [[ "${TERMINATE_ON_EXIT:-0}" == "1" && -f "${PRIME_CONFIG_FILE}" ]]; then
+  ssh "${SSH_OPTS[@]}" "${PRIME_SSH_TARGET}" "mkdir -p ~/.prime && chmod 700 ~/.prime"
+  rsync -az \
+    -e "ssh ${SSH_OPTS[*]}" \
+    "${PRIME_CONFIG_FILE}" \
+    "${PRIME_SSH_TARGET}:~/.prime/config.json"
+  ssh "${SSH_OPTS[@]}" "${PRIME_SSH_TARGET}" "chmod 600 ~/.prime/config.json"
+fi
+
 ssh "${SSH_OPTS[@]}" "${PRIME_SSH_TARGET}" "bash -lc '
   set -euo pipefail
   cd ${REMOTE_REPO_DIR}
@@ -49,6 +59,9 @@ ssh "${SSH_OPTS[@]}" "${PRIME_SSH_TARGET}" "bash -lc '
   source venv/bin/activate
   python -m pip install -U pip >/tmp/laguna_vision_pip_upgrade.log
   python -m pip install -e \".[llama,data,publish]\" >/tmp/laguna_vision_install.log
+  if [[ \"${TERMINATE_ON_EXIT:-0}\" == \"1\" ]]; then
+    python -m pip install prime==0.5.42 >/tmp/laguna_vision_prime_install.log
+  fi
   mkdir -p \"${LAGUNA_VLM_ROOT}/logs/${RUN_NAME}\"
   export LAGUNA_VLM_ROOT=\"${LAGUNA_VLM_ROOT}\"
   export MAX_RUNTIME=\"${MAX_RUNTIME}\"
