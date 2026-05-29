@@ -176,7 +176,7 @@ fi
 TRAINING_SCRIPT
 chmod +x "${training_script}"
 
-timeout "${MAX_RUNTIME}" bash "${training_script}" & &
+timeout "${MAX_RUNTIME}" bash "${training_script}" &
 run_pid=$!
 publisher_pid=""
 if [[ "${PUBLISH_DURING_RUN}" == "1" && -n "${HF_REPO_ID:-}" ]]; then
