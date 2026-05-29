@@ -42,7 +42,8 @@ ssh "${SSH_OPTS[@]}" "${PRIME_SSH_TARGET}" "bash -lc '
     apt-get update >/tmp/laguna_vision_apt_update.log
     apt-get install -y python3-pip python3-venv python3.10-venv >/tmp/laguna_vision_apt_install.log
   fi
-  if [[ ! -x venv/bin/python ]]; then
+  if [[ ! -x venv/bin/python || ! -f venv/bin/activate ]]; then
+    rm -rf venv
     python3 -m venv venv
   fi
   source venv/bin/activate
