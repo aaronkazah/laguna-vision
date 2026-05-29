@@ -7,6 +7,7 @@ RUN_NAME="${RUN_NAME:-laguna-vision-$(date -u +%Y%m%dT%H%M%SZ)}"
 MAX_RUNTIME="${MAX_RUNTIME:-8h}"
 TRAIN_COUNT="${TRAIN_COUNT:-30000}"
 EVAL_COUNT="${EVAL_COUNT:-1000}"
+EVAL_LIMIT="${EVAL_LIMIT:-16}"
 MODEL_ID="${MODEL_ID:-poolside/Laguna-XS.2}"
 VISION_TOWER="${VISION_TOWER:-google/siglip-so400m-patch14-384}"
 MAX_TILES="${MAX_TILES:-1}"
@@ -27,7 +28,7 @@ HF_HOME="${HF_HOME:-${LAGUNA_VLM_ROOT}/hf_home}"
 PUBLISH_ON_EXIT="${PUBLISH_ON_EXIT:-1}"
 PUBLISH_DURING_RUN="${PUBLISH_DURING_RUN:-1}"
 HF_PUBLISH_INTERVAL="${HF_PUBLISH_INTERVAL:-300}"
-export BATCH_SIZE CLI DATA_DIR EVAL_COUNT EVAL_MANIFEST FEATURE_CACHE_DIR GRAD_ACCUM HF_HOME INIT_CHECKPOINT
+export BATCH_SIZE CLI DATA_DIR EVAL_COUNT EVAL_LIMIT EVAL_MANIFEST FEATURE_CACHE_DIR GRAD_ACCUM HF_HOME INIT_CHECKPOINT
 export MAX_ITEMS MAX_TILES MODEL_ID NPROC OUTPUT_DIR RUN_NAME SAVE_EVERY TRAIN_COUNT TRAIN_MANIFEST VISION_TOWER VISUAL_TOKENS
 
 mkdir -p "${LOG_DIR}" "${OUTPUT_DIR}" "${FEATURE_CACHE_DIR}"
@@ -38,6 +39,7 @@ echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo "max_runtime=${MAX_RUNTIME}"
 echo "train_count=${TRAIN_COUNT}"
 echo "eval_count=${EVAL_COUNT}"
+echo "eval_limit=${EVAL_LIMIT}"
 echo "model_id=${MODEL_ID}"
 echo "vision_tower=${VISION_TOWER}"
 echo "max_tiles=${MAX_TILES}"
@@ -182,15 +184,21 @@ fi
 NPROC="${NPROC}" scripts/train_visual_bridge_ddp.sh "${train_args[@]}"
 
 if [[ -f "${OUTPUT_DIR}/projector.pt" ]]; then
-  "${CLI}" eval-ablation \
-    --manifest "${EVAL_MANIFEST}" \
-    --checkpoint "${OUTPUT_DIR}/projector.pt" \
-    --output "${OUTPUT_DIR}/ablation.jsonl" \
-    --backbone laguna \
-    --model-id "${MODEL_ID}" \
-    --threshold 0.15 \
-    --device cuda \
-    --vision-device cuda
+ eval_args=(
+   eval-ablation \
+   --manifest "${EVAL_MANIFEST}" \
+   --checkpoint "${OUTPUT_DIR}/projector.pt" \
+   --output "${OUTPUT_DIR}/ablation.jsonl" \
+   --backbone laguna \
+   --model-id "${MODEL_ID}" \
+   --threshold 0.15 \
+   --device cuda \
+   --vision-device cuda
+ )
+ if (( EVAL_LIMIT > 0 )); then
+   eval_args+=(--limit "${EVAL_LIMIT}")
+ fi
+ "${CLI}" "${eval_args[@]}"
 fi
 TRAINING_SCRIPT
 chmod +x "${training_script}"

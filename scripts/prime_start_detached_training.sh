@@ -55,6 +55,7 @@ ssh "${SSH_OPTS[@]}" "${PRIME_SSH_TARGET}" "bash -lc '
   export RUN_NAME=\"${RUN_NAME}\"
   export TRAIN_COUNT=\"${TRAIN_COUNT:-30000}\"
   export EVAL_COUNT=\"${EVAL_COUNT:-1000}\"
+  export EVAL_LIMIT=\"${EVAL_LIMIT:-16}\"
   export MODEL_ID=\"${MODEL_ID:-poolside/Laguna-XS.2}\"
   export VISION_TOWER=\"${VISION_TOWER:-google/siglip-so400m-patch14-384}\"
   export MAX_TILES=\"${MAX_TILES:-1}\"
