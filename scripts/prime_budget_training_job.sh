@@ -118,11 +118,24 @@ cat > "${training_script}" <<'TRAINING_SCRIPT'
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ ! -f "${TRAIN_MANIFEST}" || ! -f "${EVAL_MANIFEST}" ]]; then
+line_count() {
+  local path="$1"
+  [[ -f "${path}" ]] || {
+    echo 0
+    return
+  }
+  wc -l < "${path}" | tr -d ' '
+}
+
+train_rows="$(line_count "${TRAIN_MANIFEST}")"
+eval_rows="$(line_count "${EVAL_MANIFEST}")"
+if (( train_rows < TRAIN_COUNT || eval_rows < EVAL_COUNT )); then
   "${CLI}" hf-materialize \
     --output-dir "${DATA_DIR}" \
     --train-count "${TRAIN_COUNT}" \
     --eval-count "${EVAL_COUNT}"
+else
+  echo "using_cached_dataset train_rows=${train_rows} eval_rows=${eval_rows}"
 fi
 
 export MANIFEST="${TRAIN_MANIFEST}"

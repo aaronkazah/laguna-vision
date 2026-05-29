@@ -139,7 +139,7 @@ laguna-vision ask-image \
 
 ## Prime training
 
-Use a persistent Prime disk for datasets, feature caches, logs, and checkpoints. The GPU pod can be replaced; the disk is the durable artifact.
+Use a persistent Prime disk for datasets, feature caches, logs, and checkpoints. The GPU pod can be replaced; the disk and Hugging Face checkpoint repo are the durable artifacts.
 
 Start a detached run on an existing pod:
 
@@ -156,7 +156,7 @@ export PUBLISH_DURING_RUN=1
 scripts/prime_start_detached_training.sh
 ```
 
-The launcher copies the repo to the pod, installs it there, and starts the training process with `nohup`. The job continues if the laptop disconnects. With `HF_REPO_ID` set, checkpoint directories are uploaded to Hugging Face during training and again at exit. `MAX_RUNTIME` stops the training process; Prime billing stops when the pod is terminated.
+The launcher copies the repo to the pod, installs it there, and starts the training process with `nohup`. The job continues if the laptop disconnects. Completed datasets and feature tensors are reused on the mounted disk; checkpoint directories are uploaded to Hugging Face during training and again at exit when `HF_REPO_ID` is set. `MAX_RUNTIME` stops the training process; Prime billing stops when the pod is terminated.
 
 Resume from a published checkpoint on any compatible GPU pod:
 
