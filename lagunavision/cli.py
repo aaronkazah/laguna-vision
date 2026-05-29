@@ -18,6 +18,7 @@ from lagunavision.eval.run_eval import run_text_eval
 from lagunavision.eval.scene_probe import generate_scene_probe
 from lagunavision.eval.scene_probe import generate_scene_dataset
 from lagunavision.eval.score_eval import score_answer
+from lagunavision.eval.visual_overfit import write_visual_overfit_dataset
 from lagunavision.eval.web_probe import generate_web_probe
 from lagunavision.hub import resolve_checkpoint_reference
 from lagunavision.model import LagunaVisionTextPipeline
@@ -92,6 +93,12 @@ def main() -> None:
     scene_dataset.add_argument("--train-count", type=int, default=40)
     scene_dataset.add_argument("--eval-count", type=int, default=10)
     scene_dataset.set_defaults(func=_scene_dataset)
+
+    visual_overfit_dataset = subcommands.add_parser("visual-overfit-dataset")
+    visual_overfit_dataset.add_argument("--output-dir", type=Path, required=True)
+    visual_overfit_dataset.add_argument("--train-count", type=int, default=32)
+    visual_overfit_dataset.add_argument("--eval-count", type=int, default=16)
+    visual_overfit_dataset.set_defaults(func=_visual_overfit_dataset)
 
     hf_dataset = subcommands.add_parser("hf-materialize")
     hf_dataset.add_argument("--output-dir", type=Path, required=True)
@@ -269,6 +276,22 @@ def _scene_dataset(args: argparse.Namespace) -> None:
             {
                 "train_manifest": str(train_manifest),
                 "eval_manifest": str(eval_manifest),
+                "train_items": args.train_count,
+                "eval_items": args.eval_count,
+            }
+        )
+    )
+
+
+def _visual_overfit_dataset(args: argparse.Namespace) -> None:
+    write_visual_overfit_dataset(args.output_dir, train_count=args.train_count, eval_count=args.eval_count)
+    print(
+        json.dumps(
+            {
+                "train_manifest": str(args.output_dir / "train.jsonl"),
+                "eval_manifest": str(args.output_dir / "eval.jsonl"),
+                "wrong_manifest": str(args.output_dir / "wrong.jsonl"),
+                "blank_manifest": str(args.output_dir / "blank.jsonl"),
                 "train_items": args.train_count,
                 "eval_items": args.eval_count,
             }

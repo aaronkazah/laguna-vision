@@ -8,6 +8,8 @@ MAX_RUNTIME="${MAX_RUNTIME:-8h}"
 TRAIN_COUNT="${TRAIN_COUNT:-30000}"
 EVAL_COUNT="${EVAL_COUNT:-1000}"
 EVAL_LIMIT="${EVAL_LIMIT:-16}"
+TRAIN_EPOCHS="${TRAIN_EPOCHS:-1}"
+TRAIN_LR="${TRAIN_LR:-2e-5}"
 MODEL_ID="${MODEL_ID:-poolside/Laguna-XS.2}"
 VISION_TOWER="${VISION_TOWER:-google/siglip-so400m-patch14-384}"
 MAX_TILES="${MAX_TILES:-1}"
@@ -18,6 +20,7 @@ SAVE_EVERY="${SAVE_EVERY:-50}"
 MAX_ITEMS="${MAX_ITEMS:-0}"
 NPROC="${NPROC:-8}"
 DATA_DIR="${DATA_DIR:-${LAGUNA_VLM_ROOT}/datasets/hf_vqa}"
+DATASET_KIND="${DATASET_KIND:-hf}"
 TRAIN_MANIFEST="${TRAIN_MANIFEST:-${DATA_DIR}/train.jsonl}"
 EVAL_MANIFEST="${EVAL_MANIFEST:-${DATA_DIR}/eval.jsonl}"
 FEATURE_CACHE_DIR="${FEATURE_CACHE_DIR:-${LAGUNA_VLM_ROOT}/feature_cache/siglip-so400m-patch14-384-tiles${MAX_TILES}}"
@@ -30,8 +33,8 @@ PUBLISH_DURING_RUN="${PUBLISH_DURING_RUN:-1}"
 HF_PUBLISH_INTERVAL="${HF_PUBLISH_INTERVAL:-300}"
 HF_UPDATE_LATEST="${HF_UPDATE_LATEST:-1}"
 HF_LATEST_PATH_IN_REPO="${HF_LATEST_PATH_IN_REPO:-latest}"
-export BATCH_SIZE CLI DATA_DIR EVAL_COUNT EVAL_LIMIT EVAL_MANIFEST FEATURE_CACHE_DIR GRAD_ACCUM HF_HOME INIT_CHECKPOINT
-export MAX_ITEMS MAX_TILES MODEL_ID NPROC OUTPUT_DIR RUN_NAME SAVE_EVERY TRAIN_COUNT TRAIN_MANIFEST VISION_TOWER VISUAL_TOKENS
+export BATCH_SIZE CLI DATA_DIR DATASET_KIND EVAL_COUNT EVAL_LIMIT EVAL_MANIFEST FEATURE_CACHE_DIR GRAD_ACCUM HF_HOME INIT_CHECKPOINT
+export MAX_ITEMS MAX_TILES MODEL_ID NPROC OUTPUT_DIR RUN_NAME SAVE_EVERY TRAIN_COUNT TRAIN_EPOCHS TRAIN_LR TRAIN_MANIFEST VISION_TOWER VISUAL_TOKENS
 
 mkdir -p "${LOG_DIR}" "${OUTPUT_DIR}" "${FEATURE_CACHE_DIR}"
 exec > >(tee -a "${LOG_DIR}/job.log") 2>&1
@@ -42,7 +45,10 @@ echo "max_runtime=${MAX_RUNTIME}"
 echo "train_count=${TRAIN_COUNT}"
 echo "eval_count=${EVAL_COUNT}"
 echo "eval_limit=${EVAL_LIMIT}"
+echo "train_epochs=${TRAIN_EPOCHS}"
+echo "train_lr=${TRAIN_LR}"
 echo "model_id=${MODEL_ID}"
+echo "dataset_kind=${DATASET_KIND}"
 echo "vision_tower=${VISION_TOWER}"
 echo "max_tiles=${MAX_TILES}"
 echo "visual_tokens=${VISUAL_TOKENS}"
@@ -146,11 +152,36 @@ line_count() {
 
 train_rows="$(line_count "${TRAIN_MANIFEST}")"
 eval_rows="$(line_count "${EVAL_MANIFEST}")"
-if (( train_rows < TRAIN_COUNT || eval_rows < EVAL_COUNT )); then
-  "${CLI}" hf-materialize \
-    --output-dir "${DATA_DIR}" \
-    --train-count "${TRAIN_COUNT}" \
-    --eval-count "${EVAL_COUNT}"
+controls_missing=0
+if [[ "${DATASET_KIND}" == "visual-overfit" ]]; then
+  [[ -f "${DATA_DIR}/wrong.jsonl" && -f "${DATA_DIR}/blank.jsonl" ]] || controls_missing=1
+fi
+
+if (( train_rows < TRAIN_COUNT || eval_rows < EVAL_COUNT || controls_missing == 1 )); then
+  case "${DATASET_KIND}" in
+    hf)
+      "${CLI}" hf-materialize \
+        --output-dir "${DATA_DIR}" \
+        --train-count "${TRAIN_COUNT}" \
+        --eval-count "${EVAL_COUNT}"
+      ;;
+    scene)
+      "${CLI}" scene-dataset \
+        --output-dir "${DATA_DIR}" \
+        --train-count "${TRAIN_COUNT}" \
+        --eval-count "${EVAL_COUNT}"
+      ;;
+    visual-overfit)
+      "${CLI}" visual-overfit-dataset \
+        --output-dir "${DATA_DIR}" \
+        --train-count "${TRAIN_COUNT}" \
+        --eval-count "${EVAL_COUNT}"
+      ;;
+    *)
+      echo "Unsupported DATASET_KIND=${DATASET_KIND}" >&2
+      exit 2
+      ;;
+  esac
 else
   echo "using_cached_dataset train_rows=${train_rows} eval_rows=${eval_rows}"
 fi
@@ -176,8 +207,8 @@ train_args=(
     --max-tiles "${MAX_TILES}" \
     --batch-size "${BATCH_SIZE}" \
     --grad-accum "${GRAD_ACCUM}" \
-    --epochs 1 \
-    --lr 2e-5 \
+    --epochs "${TRAIN_EPOCHS}" \
+    --lr "${TRAIN_LR}" \
     --warmup-ratio 0.03 \
     --save-every "${SAVE_EVERY}" \
     --lora-rank 64 \
@@ -196,22 +227,37 @@ fi
 
 NPROC="${NPROC}" scripts/train_visual_bridge_ddp.sh "${train_args[@]}"
 
+run_ablation() {
+  local manifest="$1"
+  local output="$2"
+  eval_args=(
+    eval-ablation \
+    --manifest "${manifest}" \
+    --checkpoint "${OUTPUT_DIR}/projector.pt" \
+    --output "${output}" \
+    --backbone laguna \
+    --model-id "${MODEL_ID}" \
+    --threshold 0.15 \
+    --device cuda \
+    --vision-device cuda
+  )
+  if (( EVAL_LIMIT > 0 )); then
+    eval_args+=(--limit "${EVAL_LIMIT}")
+  fi
+  "${CLI}" "${eval_args[@]}"
+}
+
 if [[ -f "${OUTPUT_DIR}/projector.pt" ]]; then
- eval_args=(
-   eval-ablation \
-   --manifest "${EVAL_MANIFEST}" \
-   --checkpoint "${OUTPUT_DIR}/projector.pt" \
-   --output "${OUTPUT_DIR}/ablation.jsonl" \
-   --backbone laguna \
-   --model-id "${MODEL_ID}" \
-   --threshold 0.15 \
-   --device cuda \
-   --vision-device cuda
- )
- if (( EVAL_LIMIT > 0 )); then
-   eval_args+=(--limit "${EVAL_LIMIT}")
- fi
- "${CLI}" "${eval_args[@]}"
+  if [[ "${DATASET_KIND}" == "visual-overfit" ]]; then
+    run_ablation "${EVAL_MANIFEST}" "${OUTPUT_DIR}/ablation_correct.jsonl"
+    cp "${OUTPUT_DIR}/ablation_summary.json" "${OUTPUT_DIR}/ablation_correct_summary.json"
+    run_ablation "${DATA_DIR}/wrong.jsonl" "${OUTPUT_DIR}/ablation_wrong.jsonl"
+    cp "${OUTPUT_DIR}/ablation_summary.json" "${OUTPUT_DIR}/ablation_wrong_summary.json"
+    run_ablation "${DATA_DIR}/blank.jsonl" "${OUTPUT_DIR}/ablation_blank.jsonl"
+    cp "${OUTPUT_DIR}/ablation_summary.json" "${OUTPUT_DIR}/ablation_blank_summary.json"
+  else
+    run_ablation "${EVAL_MANIFEST}" "${OUTPUT_DIR}/ablation.jsonl"
+  fi
 fi
 TRAINING_SCRIPT
 chmod +x "${training_script}"
