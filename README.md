@@ -158,6 +158,13 @@ scripts/prime_start_detached_training.sh
 
 The launcher copies the repo to the pod, installs it there, and starts the training process with `nohup`. The job continues if the laptop disconnects. With `HF_REPO_ID` set, checkpoint directories are uploaded to Hugging Face during training and again at exit. `MAX_RUNTIME` stops the training process; Prime billing stops when the pod is terminated.
 
+Resume from a published checkpoint on any compatible GPU pod:
+
+```bash
+export INIT_CHECKPOINT=hf://your-org/laguna-vision/laguna-vision-b300-20260529/step_000250
+scripts/prime_start_detached_training.sh
+```
+
 Recommended first run:
 
 | Resource | Value |

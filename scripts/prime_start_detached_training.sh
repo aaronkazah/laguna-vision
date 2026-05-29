@@ -37,6 +37,11 @@ fi
 ssh "${SSH_OPTS[@]}" "${PRIME_SSH_TARGET}" "bash -lc '
   set -euo pipefail
   cd ${REMOTE_REPO_DIR}
+  if ! python3 -m venv --help >/dev/null 2>&1 || ! python3 -m pip --version >/dev/null 2>&1; then
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update >/tmp/laguna_vision_apt_update.log
+    apt-get install -y python3-pip python3-venv python3.10-venv >/tmp/laguna_vision_apt_install.log
+  fi
   if [[ ! -x venv/bin/python ]]; then
     python3 -m venv venv
   fi
@@ -60,6 +65,7 @@ ssh "${SSH_OPTS[@]}" "${PRIME_SSH_TARGET}" "bash -lc '
   export DATA_DIR=\"${DATA_DIR:-${LAGUNA_VLM_ROOT}/datasets/hf_vqa}\"
   export FEATURE_CACHE_DIR=\"${FEATURE_CACHE_DIR:-${LAGUNA_VLM_ROOT}/feature_cache/siglip-so400m-patch14-384-tiles${MAX_TILES:-1}}\"
   export OUTPUT_DIR=\"${OUTPUT_DIR:-${LAGUNA_VLM_ROOT}/checkpoints/${RUN_NAME}}\"
+  export INIT_CHECKPOINT=\"${INIT_CHECKPOINT:-}\"
   export HF_HOME=\"${REMOTE_HF_HOME}\"
   export PUBLISH_ON_EXIT=\"${PUBLISH_ON_EXIT:-1}\"
   export PUBLISH_DURING_RUN=\"${PUBLISH_DURING_RUN:-1}\"

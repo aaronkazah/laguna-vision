@@ -43,6 +43,7 @@ echo "visual_tokens=${VISUAL_TOKENS}"
 echo "output_dir=${OUTPUT_DIR}"
 echo "feature_cache_dir=${FEATURE_CACHE_DIR}"
 echo "hf_home=${HF_HOME}"
+echo "init_checkpoint=${INIT_CHECKPOINT:-}"
 echo "publish_during_run=${PUBLISH_DURING_RUN}"
 
 publish_checkpoint() {
@@ -111,59 +112,71 @@ terminate_on_exit() {
 }
 trap terminate_on_exit EXIT
 
-timeout "${MAX_RUNTIME}" bash -lc '
-  set -euo pipefail
+training_script="${LOG_DIR}/run_training.sh"
+cat > "${training_script}" <<'TRAINING_SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
 
-  if [[ ! -f "'"${TRAIN_MANIFEST}"'" || ! -f "'"${EVAL_MANIFEST}"'" ]]; then
-    "'"${CLI}"'" hf-materialize \
-      --output-dir "'"${DATA_DIR}"'" \
-      --train-count "'"${TRAIN_COUNT}"'" \
-      --eval-count "'"${EVAL_COUNT}"'"
-  fi
+if [[ ! -f "${TRAIN_MANIFEST}" || ! -f "${EVAL_MANIFEST}" ]]; then
+  "${CLI}" hf-materialize \
+    --output-dir "${DATA_DIR}" \
+    --train-count "${TRAIN_COUNT}" \
+    --eval-count "${EVAL_COUNT}"
+fi
 
-  export MANIFEST="'"${TRAIN_MANIFEST}"'"
-  export FEATURE_CACHE_DIR="'"${FEATURE_CACHE_DIR}"'"
-  export VISION_TOWER="'"${VISION_TOWER}"'"
-  export MAX_TILES="'"${MAX_TILES}"'"
-  export NPROC="'"${NPROC}"'"
-  scripts/laguna_llava_cache_features.sh
+export MANIFEST="${TRAIN_MANIFEST}"
+export FEATURE_CACHE_DIR="${FEATURE_CACHE_DIR}"
+export VISION_TOWER="${VISION_TOWER}"
+export MAX_TILES="${MAX_TILES}"
+export NPROC="${NPROC}"
+scripts/laguna_llava_cache_features.sh
 
-  NPROC="'"${NPROC}"'" scripts/train_visual_bridge_ddp.sh \
+train_args=(
     --backbone laguna \
-    --model-id "'"${MODEL_ID}"'" \
-    --manifest "'"${TRAIN_MANIFEST}"'" \
-    --eval-manifest "'"${EVAL_MANIFEST}"'" \
-    --output-dir "'"${OUTPUT_DIR}"'" \
-    --feature-cache-dir "'"${FEATURE_CACHE_DIR}"'" \
+    --model-id "${MODEL_ID}" \
+    --manifest "${TRAIN_MANIFEST}" \
+    --eval-manifest "${EVAL_MANIFEST}" \
+    --output-dir "${OUTPUT_DIR}" \
+    --feature-cache-dir "${FEATURE_CACHE_DIR}" \
     --encoder hf \
-    --encoder-id "'"${VISION_TOWER}"'" \
+    --encoder-id "${VISION_TOWER}" \
     --projector resampler \
-    --visual-tokens "'"${VISUAL_TOKENS}"'" \
-    --max-tiles "'"${MAX_TILES}"'" \
-    --batch-size "'"${BATCH_SIZE}"'" \
-    --grad-accum "'"${GRAD_ACCUM}"'" \
+    --visual-tokens "${VISUAL_TOKENS}" \
+    --max-tiles "${MAX_TILES}" \
+    --batch-size "${BATCH_SIZE}" \
+    --grad-accum "${GRAD_ACCUM}" \
     --epochs 1 \
     --lr 2e-5 \
     --warmup-ratio 0.03 \
-    --save-every "'"${SAVE_EVERY}"'" \
+    --save-every "${SAVE_EVERY}" \
     --lora-rank 64 \
     --lora-alpha 128 \
     --lora-dropout 0.05 \
     --device cuda \
     --vision-device cuda
+)
 
-  if [[ -f "'"${OUTPUT_DIR}"'/projector.pt" ]]; then
-    "'"${CLI}"'" eval-ablation \
-      --manifest "'"${EVAL_MANIFEST}"'" \
-      --checkpoint "'"${OUTPUT_DIR}"'/projector.pt \
-      --output "'"${OUTPUT_DIR}"'/ablation.jsonl \
-      --backbone laguna \
-      --model-id "'"${MODEL_ID}"'" \
-      --threshold 0.15 \
-      --device cuda \
-      --vision-device cuda
-  fi
-' &
+if [[ -n "${INIT_CHECKPOINT:-}" ]]; then
+  train_args+=(--init-checkpoint "${INIT_CHECKPOINT}")
+fi
+
+NPROC="${NPROC}" scripts/train_visual_bridge_ddp.sh "${train_args[@]}"
+
+if [[ -f "${OUTPUT_DIR}/projector.pt" ]]; then
+  "${CLI}" eval-ablation \
+    --manifest "${EVAL_MANIFEST}" \
+    --checkpoint "${OUTPUT_DIR}/projector.pt" \
+    --output "${OUTPUT_DIR}/ablation.jsonl" \
+    --backbone laguna \
+    --model-id "${MODEL_ID}" \
+    --threshold 0.15 \
+    --device cuda \
+    --vision-device cuda
+fi
+TRAINING_SCRIPT
+chmod +x "${training_script}"
+
+timeout "${MAX_RUNTIME}" bash "${training_script}" & &
 run_pid=$!
 publisher_pid=""
 if [[ "${PUBLISH_DURING_RUN}" == "1" && -n "${HF_REPO_ID:-}" ]]; then
