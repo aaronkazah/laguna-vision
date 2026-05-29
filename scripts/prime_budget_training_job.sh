@@ -14,6 +14,7 @@ VISUAL_TOKENS="${VISUAL_TOKENS:-256}"
 BATCH_SIZE="${BATCH_SIZE:-1}"
 GRAD_ACCUM="${GRAD_ACCUM:-8}"
 SAVE_EVERY="${SAVE_EVERY:-50}"
+MAX_ITEMS="${MAX_ITEMS:-0}"
 NPROC="${NPROC:-8}"
 DATA_DIR="${DATA_DIR:-${LAGUNA_VLM_ROOT}/datasets/hf_vqa}"
 TRAIN_MANIFEST="${TRAIN_MANIFEST:-${DATA_DIR}/train.jsonl}"
@@ -27,7 +28,7 @@ PUBLISH_ON_EXIT="${PUBLISH_ON_EXIT:-1}"
 PUBLISH_DURING_RUN="${PUBLISH_DURING_RUN:-1}"
 HF_PUBLISH_INTERVAL="${HF_PUBLISH_INTERVAL:-300}"
 export BATCH_SIZE CLI DATA_DIR EVAL_COUNT EVAL_MANIFEST FEATURE_CACHE_DIR GRAD_ACCUM HF_HOME INIT_CHECKPOINT
-export MAX_TILES MODEL_ID NPROC OUTPUT_DIR RUN_NAME SAVE_EVERY TRAIN_COUNT TRAIN_MANIFEST VISION_TOWER VISUAL_TOKENS
+export MAX_ITEMS MAX_TILES MODEL_ID NPROC OUTPUT_DIR RUN_NAME SAVE_EVERY TRAIN_COUNT TRAIN_MANIFEST VISION_TOWER VISUAL_TOKENS
 
 mkdir -p "${LOG_DIR}" "${OUTPUT_DIR}" "${FEATURE_CACHE_DIR}"
 exec > >(tee -a "${LOG_DIR}/job.log") 2>&1
@@ -41,6 +42,7 @@ echo "model_id=${MODEL_ID}"
 echo "vision_tower=${VISION_TOWER}"
 echo "max_tiles=${MAX_TILES}"
 echo "visual_tokens=${VISUAL_TOKENS}"
+echo "max_items=${MAX_ITEMS}"
 echo "output_dir=${OUTPUT_DIR}"
 echo "feature_cache_dir=${FEATURE_CACHE_DIR}"
 echo "hf_home=${HF_HOME}"
@@ -172,6 +174,9 @@ train_args=(
 
 if [[ -n "${INIT_CHECKPOINT:-}" ]]; then
   train_args+=(--init-checkpoint "${INIT_CHECKPOINT}")
+fi
+if (( MAX_ITEMS > 0 )); then
+  train_args+=(--max-items "${MAX_ITEMS}")
 fi
 
 NPROC="${NPROC}" scripts/train_visual_bridge_ddp.sh "${train_args[@]}"

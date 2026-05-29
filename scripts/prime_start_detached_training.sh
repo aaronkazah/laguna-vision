@@ -62,6 +62,7 @@ ssh "${SSH_OPTS[@]}" "${PRIME_SSH_TARGET}" "bash -lc '
   export BATCH_SIZE=\"${BATCH_SIZE:-1}\"
   export GRAD_ACCUM=\"${GRAD_ACCUM:-8}\"
   export SAVE_EVERY=\"${SAVE_EVERY:-50}\"
+  export MAX_ITEMS=\"${MAX_ITEMS:-0}\"
   export NPROC=\"${NPROC:-8}\"
   export DATA_DIR=\"${DATA_DIR:-${LAGUNA_VLM_ROOT}/datasets/hf_vqa}\"
   export FEATURE_CACHE_DIR=\"${FEATURE_CACHE_DIR:-${LAGUNA_VLM_ROOT}/feature_cache/siglip-so400m-patch14-384-tiles${MAX_TILES:-1}}\"
