@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # Launch N-way data-parallel visual-bridge training under torchrun.
 #
-# The frozen backbone is replicated per GPU; only the small connector's
-# gradients are averaged across ranks, so the expensive frozen forward scales
-# with GPU count. Set NPROC to the number of visible GPUs (default 8).
+# The frozen backbone is replicated per GPU; only trainable adapter gradients are
+# averaged across ranks. Set NPROC to the number of visible GPUs.
 #
 # All arguments after the script name pass straight through to
 # `laguna-vision train-visual-bridge`, e.g.:
@@ -13,8 +12,8 @@
 #     --eval-manifest data/hf_vqa/eval.jsonl \
 #     --output-dir checkpoints/laguna_vqa \
 #     --backbone laguna \
-#     --encoder hf --encoder-id openai/clip-vit-base-patch32 \
-#     --projector resampler --visual-tokens 64 --max-tiles 9 \
+#     --encoder hf --encoder-id google/siglip-so400m-patch14-384 \
+#     --projector resampler --visual-tokens 256 --max-tiles 1 \
 #     --batch-size 8 --grad-accum 4 --epochs 1 \
 #     --device cuda --vision-device cuda
 set -euo pipefail

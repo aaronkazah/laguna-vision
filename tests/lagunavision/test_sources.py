@@ -4,11 +4,11 @@ from lagunavision.data.spatial_ocr import generate_spatial_ocr_manifest
 
 def test_required_dataset_sources_are_public_and_general() -> None:
     ids = {source.id for source in required_sources()}
-    assert "liuhaotian/LLaVA-Pretrain" in ids
     assert "HuggingFaceM4/DocumentVQA" in ids
     assert "lmms-lab/textvqa" in ids
     assert "howard-hou/OCR-VQA" in ids
-    assert "synthetic-spatial-ocr" in ids
+    assert "HuggingFaceM4/ChartQA" in ids
+    assert "liuhaotian/LLaVA-Pretrain" not in ids
     assert all("code" not in source.id.casefold() for source in DATASET_SOURCES)
 
 

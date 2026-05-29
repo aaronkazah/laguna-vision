@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
-# Cheap end-to-end smoke: generate tiny image QA data, train a tiny HF backbone,
-# ask one image question, and run the ablation harness. This proves the code path
-# before spending Prime GPU money; it is not evidence of Laguna visual quality.
+# Local end-to-end check for data, training, inference, and evaluation.
 set -euo pipefail
 
 ROOT="${ROOT:-.smoke/laguna-vision}"

@@ -1,38 +1,66 @@
 #!/usr/bin/env bash
-# Runs on a Prime pod. It assumes the repo is present, dependencies are installed,
-# and LAGUNA_VLM_ROOT points at a mounted persistent disk.
 set -euo pipefail
 
 : "${LAGUNA_VLM_ROOT:?Set LAGUNA_VLM_ROOT to the mounted Prime persistent disk path.}"
 
-RUN_NAME="${RUN_NAME:-laguna-vlm-$(date -u +%Y%m%dT%H%M%SZ)}"
-MAX_RUNTIME="${MAX_RUNTIME:-9h}"
-TRAIN_MANIFEST="${TRAIN_MANIFEST:-${LAGUNA_VLM_ROOT}/data/llava/train.jsonl}"
-EVAL_MANIFEST="${EVAL_MANIFEST:-${LAGUNA_VLM_ROOT}/data/llava/eval.jsonl}"
-FEATURE_CACHE_DIR="${FEATURE_CACHE_DIR:-${LAGUNA_VLM_ROOT}/feature_cache/clip-vit-large-patch14-336}"
+RUN_NAME="${RUN_NAME:-laguna-vision-$(date -u +%Y%m%dT%H%M%SZ)}"
+MAX_RUNTIME="${MAX_RUNTIME:-8h}"
+TRAIN_COUNT="${TRAIN_COUNT:-30000}"
+EVAL_COUNT="${EVAL_COUNT:-1000}"
+MODEL_ID="${MODEL_ID:-poolside/Laguna-XS.2}"
+VISION_TOWER="${VISION_TOWER:-google/siglip-so400m-patch14-384}"
+MAX_TILES="${MAX_TILES:-1}"
+VISUAL_TOKENS="${VISUAL_TOKENS:-256}"
+BATCH_SIZE="${BATCH_SIZE:-1}"
+GRAD_ACCUM="${GRAD_ACCUM:-8}"
+SAVE_EVERY="${SAVE_EVERY:-50}"
+NPROC="${NPROC:-8}"
+DATA_DIR="${DATA_DIR:-${LAGUNA_VLM_ROOT}/datasets/hf_vqa}"
+TRAIN_MANIFEST="${TRAIN_MANIFEST:-${DATA_DIR}/train.jsonl}"
+EVAL_MANIFEST="${EVAL_MANIFEST:-${DATA_DIR}/eval.jsonl}"
+FEATURE_CACHE_DIR="${FEATURE_CACHE_DIR:-${LAGUNA_VLM_ROOT}/feature_cache/siglip-so400m-patch14-384-tiles${MAX_TILES}}"
+OUTPUT_DIR="${OUTPUT_DIR:-${LAGUNA_VLM_ROOT}/checkpoints/${RUN_NAME}}"
 LOG_DIR="${LOG_DIR:-${LAGUNA_VLM_ROOT}/logs/${RUN_NAME}}"
 CLI="${LAGUNA_VISION_CLI:-laguna-vision}"
+HF_HOME="${HF_HOME:-${LAGUNA_VLM_ROOT}/hf_home}"
+export HF_HOME
 
-mkdir -p "${LOG_DIR}" "${LAGUNA_VLM_ROOT}/checkpoints"
+mkdir -p "${LOG_DIR}" "${OUTPUT_DIR}" "${FEATURE_CACHE_DIR}"
 exec > >(tee -a "${LOG_DIR}/job.log") 2>&1
 
 echo "run_name=${RUN_NAME}"
 echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo "max_runtime=${MAX_RUNTIME}"
-echo "train_manifest=${TRAIN_MANIFEST}"
-echo "eval_manifest=${EVAL_MANIFEST}"
+echo "train_count=${TRAIN_COUNT}"
+echo "eval_count=${EVAL_COUNT}"
+echo "model_id=${MODEL_ID}"
+echo "vision_tower=${VISION_TOWER}"
+echo "max_tiles=${MAX_TILES}"
+echo "visual_tokens=${VISUAL_TOKENS}"
+echo "output_dir=${OUTPUT_DIR}"
 echo "feature_cache_dir=${FEATURE_CACHE_DIR}"
+echo "hf_home=${HF_HOME}"
+
+publish_latest_checkpoint() {
+  [[ "${HF_REPO_ID:-}" != "" && "${PUBLISH_ON_EXIT:-0}" == "1" ]] || return 0
+
+  latest="$(find "${OUTPUT_DIR}" -maxdepth 1 -type d -name 'step_*' 2>/dev/null | sort | tail -1 || true)"
+  if [[ -z "${latest}" && -f "${OUTPUT_DIR}/projector.pt" ]]; then
+    latest="${OUTPUT_DIR}"
+  fi
+  [[ -n "${latest}" ]] || return 0
+
+  CHECKPOINT_DIR="${latest}" \
+    HF_PRIVATE="${HF_PRIVATE:-1}" \
+    PATH_IN_REPO="${HF_PATH_IN_REPO:-${RUN_NAME}/$(basename "${latest}")}" \
+    scripts/publish_hf_checkpoint.sh || true
+}
 
 terminate_on_exit() {
   status=$?
   echo "finished_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "exit_status=${status}"
-  if [[ "${HF_REPO_ID:-}" != "" && "${PUBLISH_ON_EXIT:-0}" == "1" ]]; then
-    latest="$(find "${LAGUNA_VLM_ROOT}/checkpoints/laguna_stage2_instruction" -maxdepth 1 -type d -name 'step_*' 2>/dev/null | sort | tail -1 || true)"
-    if [[ -n "${latest}" ]]; then
-      CHECKPOINT_DIR="${latest}" HF_PRIVATE="${HF_PRIVATE:-1}" scripts/publish_hf_checkpoint.sh || true
-    fi
-  fi
+  publish_latest_checkpoint
   if [[ "${TERMINATE_ON_EXIT:-0}" == "1" ]]; then
     if [[ -z "${PRIME_POD_ID:-}" ]]; then
       echo "TERMINATE_ON_EXIT=1 but PRIME_POD_ID is unset; leaving pod running."
@@ -46,19 +74,56 @@ terminate_on_exit() {
 }
 trap terminate_on_exit EXIT
 
-if [[ ! -f "${TRAIN_MANIFEST}" ]]; then
-  echo "Missing ${TRAIN_MANIFEST}. Materialize or copy LLaVA-format data onto the persistent disk first." >&2
-  exit 2
-fi
-
 timeout "${MAX_RUNTIME}" bash -lc '
   set -euo pipefail
+
+  if [[ ! -f "'"${TRAIN_MANIFEST}"'" || ! -f "'"${EVAL_MANIFEST}"'" ]]; then
+    "'"${CLI}"'" hf-materialize \
+      --output-dir "'"${DATA_DIR}"'" \
+      --train-count "'"${TRAIN_COUNT}"'" \
+      --eval-count "'"${EVAL_COUNT}"'"
+  fi
+
   export MANIFEST="'"${TRAIN_MANIFEST}"'"
-  export EVAL_MANIFEST="'"${EVAL_MANIFEST}"'"
   export FEATURE_CACHE_DIR="'"${FEATURE_CACHE_DIR}"'"
-
+  export VISION_TOWER="'"${VISION_TOWER}"'"
+  export MAX_TILES="'"${MAX_TILES}"'"
+  export NPROC="'"${NPROC}"'"
   scripts/laguna_llava_cache_features.sh
-  MAX_ITEMS="'"${STAGE1_MAX_ITEMS:-300000}"'" scripts/laguna_llava_stage1.sh
-  MAX_ITEMS="'"${STAGE2_MAX_ITEMS:-150000}"'" scripts/laguna_llava_stage2.sh
-'
 
+  NPROC="'"${NPROC}"'" scripts/train_visual_bridge_ddp.sh \
+    --backbone laguna \
+    --model-id "'"${MODEL_ID}"'" \
+    --manifest "'"${TRAIN_MANIFEST}"'" \
+    --eval-manifest "'"${EVAL_MANIFEST}"'" \
+    --output-dir "'"${OUTPUT_DIR}"'" \
+    --feature-cache-dir "'"${FEATURE_CACHE_DIR}"'" \
+    --encoder hf \
+    --encoder-id "'"${VISION_TOWER}"'" \
+    --projector resampler \
+    --visual-tokens "'"${VISUAL_TOKENS}"'" \
+    --max-tiles "'"${MAX_TILES}"'" \
+    --batch-size "'"${BATCH_SIZE}"'" \
+    --grad-accum "'"${GRAD_ACCUM}"'" \
+    --epochs 1 \
+    --lr 2e-5 \
+    --warmup-ratio 0.03 \
+    --save-every "'"${SAVE_EVERY}"'" \
+    --lora-rank 64 \
+    --lora-alpha 128 \
+    --lora-dropout 0.05 \
+    --device cuda \
+    --vision-device cuda
+
+  if [[ -f "'"${OUTPUT_DIR}"'/projector.pt" ]]; then
+    "'"${CLI}"'" eval-ablation \
+      --manifest "'"${EVAL_MANIFEST}"'" \
+      --checkpoint "'"${OUTPUT_DIR}"'/projector.pt \
+      --output "'"${OUTPUT_DIR}"'/ablation.jsonl \
+      --backbone laguna \
+      --model-id "'"${MODEL_ID}"'" \
+      --threshold 0.15 \
+      --device cuda \
+      --vision-device cuda
+  fi
+'

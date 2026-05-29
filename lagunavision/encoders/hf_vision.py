@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from lagunavision.defaults import DEFAULT_VISION_TOWER
 from lagunavision.devices import resolve_torch_device
 from lagunavision.encoders.base import EncodedTile
 from lagunavision.types import Tile
@@ -12,7 +13,7 @@ from lagunavision.types import Tile
 
 @dataclass
 class HfVisionEncoder:
-    model_id: str = "openai/clip-vit-base-patch32"
+    model_id: str = DEFAULT_VISION_TOWER
     device: str = "auto"
 
     def __post_init__(self) -> None:

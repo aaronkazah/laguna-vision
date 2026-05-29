@@ -10,6 +10,7 @@ from lagunavision.data.hf_materialize import DEFAULT_HF_DATASETS, materialize_hf
 from lagunavision.data.llava import materialize_llava_hf, materialize_llava_json
 from lagunavision.data.manifest import load_manifest
 from lagunavision.data.sources import DATASET_SOURCES
+from lagunavision.defaults import DEFAULT_VISION_TOWER
 from lagunavision.data.spatial_ocr import generate_spatial_ocr_manifest
 from lagunavision.eval.ablation import AblationConfig, run_ablation
 from lagunavision.eval.demo_set import generate_demo_eval
@@ -114,7 +115,7 @@ def main() -> None:
     cache_features.add_argument("--manifest", type=Path, required=True)
     cache_features.add_argument("--output-dir", type=Path, required=True)
     cache_features.add_argument("--encoder", choices=("pil", "hf"), default="hf")
-    cache_features.add_argument("--encoder-id", default="openai/clip-vit-large-patch14-336")
+    cache_features.add_argument("--encoder-id", default=DEFAULT_VISION_TOWER)
     cache_features.add_argument("--patch-px", type=int, default=32)
     cache_features.add_argument("--max-tiles", type=int, default=9)
     cache_features.add_argument("--device", default="cuda")

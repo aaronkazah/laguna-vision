@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Parallel CLIP/SigLIP feature cache builder. Run this before training so DDP
-# ranks load persisted visual features instead of re-encoding the dataset.
+# Parallel feature cache builder for HF vision encoders.
 set -euo pipefail
 
 : "${MANIFEST:?Set MANIFEST to a Laguna Vision train/eval JSONL manifest.}"
@@ -8,7 +7,7 @@ set -euo pipefail
 
 NPROC="${NPROC:-8}"
 ENCODER="${ENCODER:-hf}"
-VISION_TOWER="${VISION_TOWER:-openai/clip-vit-large-patch14-336}"
+VISION_TOWER="${VISION_TOWER:-google/siglip-so400m-patch14-384}"
 MAX_TILES="${MAX_TILES:-1}"
 
 mkdir -p "${FEATURE_CACHE_DIR}"

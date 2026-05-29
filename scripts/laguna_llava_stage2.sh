@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# LLaVA-style stage 2 for Laguna: warm-start from stage 1, then instruction-tune
-# the projector plus Laguna LoRA on visual conversation data.
+# LLaVA-compatible visual instruction tuning for Laguna.
 set -euo pipefail
 
 : "${LAGUNA_VLM_ROOT:?Set LAGUNA_VLM_ROOT to the mounted Prime persistent disk path.}"
@@ -12,7 +11,7 @@ if [[ "${ALLOW_POD_LOCAL_OUTPUT:-0}" != "1" && "${LAGUNA_VLM_ROOT}" != /mnt/* &&
 fi
 
 MODEL_ID="${MODEL_ID:-poolside/Laguna-XS.2}"
-VISION_TOWER="${VISION_TOWER:-openai/clip-vit-large-patch14-336}"
+VISION_TOWER="${VISION_TOWER:-google/siglip-so400m-patch14-384}"
 MANIFEST="${MANIFEST:-${LAGUNA_VLM_ROOT}/manifests/llava_instruction/train.jsonl}"
 EVAL_MANIFEST="${EVAL_MANIFEST:-${LAGUNA_VLM_ROOT}/manifests/llava_instruction/eval.jsonl}"
 STAGE1_CHECKPOINT="${STAGE1_CHECKPOINT:-${LAGUNA_VLM_ROOT}/checkpoints/laguna_stage1_alignment/projector.pt}"
@@ -42,7 +41,7 @@ NPROC="${NPROC}" "$(dirname "$0")/train_visual_bridge_ddp.sh" \
   --encoder hf \
   --encoder-id "${VISION_TOWER}" \
   --projector resampler \
-  --visual-tokens "${VISUAL_TOKENS:-576}" \
+  --visual-tokens "${VISUAL_TOKENS:-256}" \
   --max-tiles "${MAX_TILES:-1}" \
   --batch-size "${BATCH_SIZE:-1}" \
   --grad-accum "${GRAD_ACCUM:-16}" \
