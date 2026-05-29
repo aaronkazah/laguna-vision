@@ -62,14 +62,20 @@ echo "hf_update_latest=${HF_UPDATE_LATEST}"
 
 publish_checkpoint() {
   local checkpoint_dir="$1"
+  local artifact_name
   [[ "${HF_REPO_ID:-}" != "" ]] || return 0
   [[ -f "${checkpoint_dir}/projector.pt" ]] || return 0
   [[ -f "${checkpoint_dir}/projector_spec.json" ]] || return 0
   [[ -f "${checkpoint_dir}/train_report.json" ]] || return 0
+  if [[ "${checkpoint_dir%/}" == "${OUTPUT_DIR%/}" ]]; then
+    artifact_name="final"
+  else
+    artifact_name="$(basename "${checkpoint_dir}")"
+  fi
 
   CHECKPOINT_DIR="${checkpoint_dir}" \
     HF_PRIVATE="${HF_PRIVATE:-1}" \
-    PATH_IN_REPO="${HF_PATH_IN_REPO:-${RUN_NAME}}/$(basename "${checkpoint_dir}")" \
+    PATH_IN_REPO="${HF_PATH_IN_REPO:-${RUN_NAME}}/${artifact_name}" \
     scripts/publish_hf_checkpoint.sh
 
   if [[ "${HF_UPDATE_LATEST}" == "1" ]]; then
