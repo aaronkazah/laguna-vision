@@ -47,7 +47,7 @@ fi
 ssh "${SSH_OPTS[@]}" "${PRIME_SSH_TARGET}" "bash -lc '
   set -euo pipefail
   cd ${REMOTE_REPO_DIR}
-  if ! python3 -m venv --help >/dev/null 2>&1 || ! python3 -m pip --version >/dev/null 2>&1; then
+  install_python_venv() {
     export DEBIAN_FRONTEND=noninteractive
     if [[ \"\$(id -u)\" == \"0\" ]]; then
       apt-get update >/tmp/laguna_vision_apt_update.log
@@ -56,10 +56,17 @@ ssh "${SSH_OPTS[@]}" "${PRIME_SSH_TARGET}" "bash -lc '
       sudo apt-get update >/tmp/laguna_vision_apt_update.log
       sudo apt-get install -y python3-pip python3-venv python3.10-venv >/tmp/laguna_vision_apt_install.log
     fi
+  }
+  if ! python3 -m venv --help >/dev/null 2>&1 || ! python3 -m pip --version >/dev/null 2>&1; then
+    install_python_venv
   fi
   if [[ ! -x venv/bin/python || ! -f venv/bin/activate ]]; then
     rm -rf venv
-    python3 -m venv venv
+    python3 -m venv venv || {
+      install_python_venv
+      rm -rf venv
+      python3 -m venv venv
+    }
   fi
   source venv/bin/activate
   python -m pip install -U pip >/tmp/laguna_vision_pip_upgrade.log
