@@ -31,12 +31,12 @@ class HfVisionEncoder:
 
     def _load_sync(self) -> None:
         try:
-            from transformers import AutoModel, AutoProcessor
+            from transformers import AutoImageProcessor, AutoModel
         except ImportError as exc:
             raise RuntimeError("Install Llama dependencies with `python -m pip install -e '.[llama]'`.") from exc
 
         resolved_device = resolve_torch_device(self.device)
-        self._processor = AutoProcessor.from_pretrained(self.model_id)
+        self._processor = AutoImageProcessor.from_pretrained(self.model_id)
         self._model = AutoModel.from_pretrained(self.model_id)
         self._model.eval()
         self._model.to(resolved_device)
