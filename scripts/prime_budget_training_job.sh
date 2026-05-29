@@ -101,9 +101,11 @@ publish_new_checkpoints() {
 publish_latest_checkpoint() {
   [[ "${PUBLISH_ON_EXIT}" == "1" ]] || return 0
 
-  latest="$(find "${OUTPUT_DIR}" -maxdepth 1 -type d -name 'step_*' 2>/dev/null | sort | tail -1 || true)"
-  if [[ -z "${latest}" && -f "${OUTPUT_DIR}/projector.pt" ]]; then
+  latest=""
+  if [[ -f "${OUTPUT_DIR}/projector.pt" ]]; then
     latest="${OUTPUT_DIR}"
+  else
+    latest="$(find "${OUTPUT_DIR}" -maxdepth 1 -type d -name 'step_*' 2>/dev/null | sort | tail -1 || true)"
   fi
   [[ -n "${latest}" ]] || return 0
 
