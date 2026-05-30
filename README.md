@@ -1,5 +1,7 @@
 # Laguna Vision
 
+[Open-source GitHub](https://github.com/aaronkazah/laguna-vision) · [Hugging Face model](https://huggingface.co/poolside-laguna-hackathon/laguna-vision)
+
 Laguna XS.2 is text-only. For real computer use, that is a hard limit: the relevant state is often a screenshot, a browser page, a form, a chart, a terminal image, or an error dialog rather than text in the prompt.
 
 Laguna Vision adds a visual input path to `poolside/Laguna-XS.2`. It uses SigLIP to encode images, an AnyRes tiling path for screenshots and documents, a resampler projector to map visual features into Laguna's embedding space, and LoRA adapters for supervised instruction tuning.

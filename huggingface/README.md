@@ -14,6 +14,8 @@ private: true
 
 # Laguna Vision
 
+[Open-source GitHub](https://github.com/aaronkazah/laguna-vision) · [Hugging Face model](https://huggingface.co/poolside-laguna-hackathon/laguna-vision)
+
 Laguna Vision adds a visual input path to `poolside/Laguna-XS.2`. SigLIP encodes images, AnyRes tiling preserves screenshot/document detail, a resampler projector maps features into Laguna's embedding space, and LoRA adapters are trained with supervised visual-instruction data.
 
 Method: **post-training multimodal adaptation via supervised fine-tuning**.

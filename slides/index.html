@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, noarchive" />
 <title>Laguna Vision</title>
 <style>
   :root{
@@ -62,6 +63,10 @@
     padding:10px 20px;border-radius:999px;letter-spacing:.08em;text-transform:uppercase;
     font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:600;}
   .chip b{color:var(--green);font-weight:700;}
+  .linkbar{display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin-top:26px;
+    font-size:16px;font-weight:700;letter-spacing:.04em;}
+  .linkbar a{color:var(--green-dim);text-decoration:none;border-bottom:2px solid rgba(111,184,0,.35);}
+  .linkbar a:hover{color:var(--green);border-bottom-color:var(--green);}
 
   /* PIPELINE */
   .flow{display:flex;align-items:stretch;gap:0;margin-top:40px;}
@@ -152,6 +157,10 @@
       <span class="chip"><b>LoRA</b> r64 / a128 (parameter-efficient fine-tuning)</span>
       <span class="chip"><b>vLLM</b> serving (inference)</span>
       <span class="chip"><b>300k</b> examples (documents, OCR, charts, screenshots, UIs, natural images)</span>
+    </div>
+    <div class="linkbar" aria-label="Project links">
+      <a href="https://github.com/aaronkazah/laguna-vision">Open-source GitHub</a>
+      <a href="https://huggingface.co/poolside-laguna-hackathon/laguna-vision">Hugging Face model</a>
     </div>
     <span class="brand"><b>Laguna Vision</b> · model card</span>
     <span class="pageno">01 / 08</span>
@@ -352,7 +361,7 @@
         <p>Run eval-ablation live — blind-text vs OCR-only vs trained-visual vs untrained-control — to prove the visual tokens carry the signal, honestly.</p>
       </div>
     </div>
-    <p class="note">Bonus: a <b>vLLM gateway latency demo</b> — image → embeddings → vLLM — and the <b>80-probe grounding audit</b> streaming raw payloads for a transparency story.</p>
+    <p class="note">Bonus: a <b>vLLM gateway latency demo</b> — image → embeddings → vLLM — and the <b>80-probe grounding audit</b> streaming raw payloads for a transparency story. Links: <a href="https://github.com/aaronkazah/laguna-vision">GitHub</a> · <a href="https://huggingface.co/poolside-laguna-hackathon/laguna-vision">Hugging Face</a>.</p>
     <span class="brand"><b>Laguna Vision</b> · poolside/Laguna-XS.2</span>
     <span class="pageno">08 / 08</span>
   </section></div>
