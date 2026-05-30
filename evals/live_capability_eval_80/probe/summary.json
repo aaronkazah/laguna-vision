@@ -1,0 +1,14 @@
+{
+  "items": 80,
+  "by_category": {
+    "basic_color": 10,
+    "basic_shape": 10,
+    "color_shape_binding": 10,
+    "dense_ui_localization": 10,
+    "meme_semantics": 10,
+    "no_text_control": 10,
+    "table_precision": 10,
+    "tiny_ocr": 10
+  },
+  "manifest": "manifest.jsonl"
+}

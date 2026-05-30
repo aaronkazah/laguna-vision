@@ -1,0 +1,54 @@
+{
+  "accuracy": 0.15,
+  "by_category": {
+    "basic_color": {
+      "accuracy": 0.3,
+      "passed": 3,
+      "total": 10
+    },
+    "basic_shape": {
+      "accuracy": 0.2,
+      "passed": 2,
+      "total": 10
+    },
+    "color_shape_binding": {
+      "accuracy": 0.1,
+      "passed": 1,
+      "total": 10
+    },
+    "dense_ui_localization": {
+      "accuracy": 0.0,
+      "passed": 0,
+      "total": 10
+    },
+    "meme_semantics": {
+      "accuracy": 0.3,
+      "passed": 3,
+      "total": 10
+    },
+    "no_text_control": {
+      "accuracy": 0.3,
+      "passed": 3,
+      "total": 10
+    },
+    "table_precision": {
+      "accuracy": 0.0,
+      "passed": 0,
+      "total": 10
+    },
+    "tiny_ocr": {
+      "accuracy": 0.0,
+      "passed": 0,
+      "total": 10
+    }
+  },
+  "by_expected_result": {
+    "measure": {
+      "accuracy": 0.15,
+      "passed": 12,
+      "total": 80
+    }
+  },
+  "passed": 12,
+  "total": 80
+}

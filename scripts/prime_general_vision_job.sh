@@ -159,28 +159,29 @@ private: {str(private).lower()}
 
 # Laguna Vision adapter
 
-This repository contains Laguna Vision checkpoint artifacts for `{run_name}`. The model is an early visual adapter for `poolside/Laguna-XS.2`, using `google/siglip-so400m-patch14-384` image features, AnyRes tiling, a resampler projector, and optional LoRA instruction adapters.
+Laguna Vision adds visual input to `poolside/Laguna-XS.2`. SigLIP encodes images, AnyRes tiling preserves screenshot/document detail, a resampler projector maps features into Laguna embedding space, and LoRA adapters are trained with supervised visual-instruction data.
 
-The project was built for the [Poolside Research Hackathon](https://www.competehub.dev/en/competitions/lumaevt-toewzCfp1Ue1PcR) as a near-capability exploration for computer use: visual grounding for screenshots, UI state, code/debug images, documents, and other context that a text-only Laguna prompt cannot inspect directly.
+Method: post-training multimodal adaptation via supervised fine-tuning.
 
-## Training recipe
+## Run
 
-- Recipe: `{os.environ["DATASET_RECIPE"]}`
-- Train budget: `{train_budget or "full recipe"}` examples
-- Max image tiles: `{os.environ["MAX_TILES"]}` global-plus-crop tiles
-- Stage 1: visual projector alignment, projector only
-- Stage 2: projector plus LoRA instruction tuning
-- Checkpoints: saved every 100 optimizer steps under `{base}/stage1/...` and `{base}/stage2/...`
+| Field | Value |
+|---|---|
+| Run | `{run_name}` |
+| Recipe | `{os.environ["DATASET_RECIPE"]}` |
+| Train budget | `{train_budget or "full recipe"}` examples |
+| Max image tiles | `{os.environ["MAX_TILES"]}` |
+| Stages | Stage 1 projector alignment; Stage 2 projector + LoRA instruction tuning |
+| Checkpoints | `{base}/stage1/...` and `{base}/stage2/...`, every 100 optimizer steps |
+| Run metadata | `{base}/run_metadata/` |
 
-The 200k hackathon release used 80k alignment examples from LLaVA pretrain and 120k instruction examples from LLaVA Instruct, ShareGPT4V, GQA, DocumentVQA, TextVQA, OCR-VQA, ChartQA, WebSight, RICO ScreenQA, RICO Screen2Words, WebSRC, and synthetic spatial OCR. The full locked recipe remains 300k examples; the 200k slice was a time/budget concession to prove the complete training, serving, and evaluation path.
+Raw public image archives and feature caches are not uploaded to this model repo. This repo stores adapter artifacts, runtime files, and reproducibility metadata.
 
-## Data handling
+## Capability check
 
-Raw public datasets and image archives are intentionally not uploaded to this Hugging Face model repo. The Prime run keeps raw assets, manifests, feature caches, logs, and checkpoints on the persistent `/data/laguna-vlm` disk. This repo uploads model artifacts plus reproducibility metadata only.
+The current `latest` eval is 12 / 80 strict passes across 8 categories. Generate a comparable probe with `laguna-vision capability-probe --output-dir data/capability_probe`, then score an endpoint with `laguna-vision eval-endpoint --endpoint <url> --manifest data/capability_probe/manifest.jsonl --output runs/evals/capability_probe.answers.jsonl --summary-output runs/evals/capability_probe.summary.json`.
 
-Uploaded metadata for this run lives at `{base}/run_metadata/`.
-
-## API input format
+## API
 
 The included `handler.py` accepts either a simple JSON payload:
 
@@ -196,18 +197,10 @@ or OpenAI-style multimodal messages:
 
 `image`/`image_url.url` may be a base64 string, data URI, HTTPS URL, or local file path available to the endpoint.
 
-## Intended use
-
-This is an experimental checkpoint intended to verify that Laguna can condition on images and answer broadly across natural images, screenshots, OCR, documents, charts, UI, and spatial questions. It is not a safety-reviewed production model.
-
-## Current evaluation status
-
-Serving works, but the latest checkpoint is only weakly grounded. In the live capability probe it passed 1 / 7 cases: no-visible-text abstention. It failed simple color/shape controls, precise OCR, dense UI state, table values, meme semantics, counting, and exact localization. Use `laguna-vision capability-probe --output-dir data/capability_probe` to generate deterministic expected-pass and known-failure probes, then run `laguna-vision eval-endpoint --endpoint <url> --manifest data/capability_probe/manifest.jsonl --output runs/evals/capability_probe.answers.jsonl` to score a deployed endpoint by category.
-
 ## Limitations
 
 - Early checkpoint quality is uneven.
-- OCR, dense UI localization, meme semantics, counting, and precise spatial localization can fail.
+- OCR, dense UI localization, counting, charts, tables, and precise spatial localization are unreliable.
 - The adapter depends on the Laguna Vision inference/training code in this repository layout.
 - Generated text may hallucinate; validate outputs before relying on them.
 """,
