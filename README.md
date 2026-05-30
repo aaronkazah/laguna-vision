@@ -252,7 +252,39 @@ Endpoint settings:
 | Environment | `LAGUNA_CHECKPOINT_PATH=latest`, `LAGUNA_MODEL_ID=poolside/Laguna-XS.2`, `LAGUNA_MAX_NEW_TOKENS=128` |
 | Secret | `HF_TOKEN` with base-model access if Laguna XS.2 is gated/private |
 
-Simple request:
+For the Hugging Face Inference Endpoint UI, use the JSON body editor. A text-only payload like `{"inputs": "Hello world!"}` will not exercise Laguna Vision; the handler expects an image and a question.
+
+Quick HF UI test payload:
+
+```json
+{
+  "inputs": {
+    "image": "https://images.cocodataset.org/val2017/000000039769.jpg",
+    "question": "What animals are in this image? Answer briefly.",
+    "max_new_tokens": 64
+  }
+}
+```
+
+Same payload with `curl`:
+
+```bash
+HF_ENDPOINT=https://your-endpoint.endpoints.huggingface.cloud
+HF_ENDPOINT_TOKEN=...
+
+curl -s "${HF_ENDPOINT}" \
+  -H "Authorization: Bearer ${HF_ENDPOINT_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "inputs": {
+      "image": "https://images.cocodataset.org/val2017/000000039769.jpg",
+      "question": "What animals are in this image? Answer briefly.",
+      "max_new_tokens": 64
+    }
+  }'
+```
+
+Generic request:
 
 ```json
 {
@@ -262,6 +294,29 @@ Simple request:
     "max_new_tokens": 128
   }
 }
+```
+
+Local image as a data URI:
+
+```bash
+IMAGE_DATA_URI="$(python3 - <<'PY'
+import base64
+from pathlib import Path
+
+print("data:image/png;base64," + base64.b64encode(Path("path/to/image.png").read_bytes()).decode("ascii"))
+PY
+)"
+
+curl -s "${HF_ENDPOINT}" \
+  -H "Authorization: Bearer ${HF_ENDPOINT_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"inputs\": {
+      \"image\": \"${IMAGE_DATA_URI}\",
+      \"question\": \"What is shown in this image?\",
+      \"max_new_tokens\": 64
+    }
+  }"
 ```
 
 OpenAI-style multimodal request:
@@ -286,6 +341,137 @@ Response:
 
 ```json
 {"answer": "...", "checkpoint": "latest"}
+```
+
+## vLLM serving
+
+The production vLLM path is split into two processes: vLLM serves the Laguna text backbone with prompt embeddings enabled, and the Laguna Vision gateway computes SigLIP/AnyRes/projector embeddings before forwarding them to vLLM. The gateway uses vLLM's `/v1/completions` endpoint with `prompt_embeds` as a top-level field; image requests sent to the gateway's OpenAI-style `/v1/chat/completions` route are converted back to chat-shaped responses for client compatibility.
+
+Live Prime validation on 2026-05-30 confirmed `vllm==0.10.2` accepts `--enable-prompt-embeds` and serves top-level `prompt_embeds` on `/v1/completions`. A public Qwen smoke model passed this check on a 1x A100 40GB pod. The same 1x A100 40GB pod was not large enough for `poolside/Laguna-XS.2` through vLLM's Transformers backend: it resolved `TransformersForCausalLM`, then failed during allocation with CUDA OOM. Use an H100/A100 80GB-class GPU, tensor parallelism, or a smaller/quantized/merged serving target for the real Laguna backend.
+
+Merge the Stage 2 LoRA adapter for the simplest backend:
+
+```bash
+laguna-vision-vllm merge-lora \
+  --base-model poolside/Laguna-XS.2 \
+  --lora-dir latest/lora \
+  --output-dir runs/laguna-vlm/merged-laguna-vision
+```
+
+Start the vLLM text backend:
+
+```bash
+VLLM_MODEL=runs/laguna-vlm/merged-laguna-vision \
+VLLM_SERVED_MODEL_NAME=laguna-vision \
+VLLM_TENSOR_PARALLEL_SIZE=1 \
+scripts/vllm_text_backend.sh
+```
+
+If you keep LoRA unmerged, set `VLLM_MODEL=poolside/Laguna-XS.2`, `VLLM_LORA_DIR=latest/lora`, and `VLLM_LORA_NAME=laguna-vision`; the script adds `--enable-lora --lora-modules`.
+
+Start the image gateway:
+
+```bash
+LAGUNA_CHECKPOINT=latest \
+VLLM_BASE_URL=http://127.0.0.1:8000/v1 \
+VLLM_MODEL=laguna-vision \
+LAGUNA_VISION_DEVICE=cuda \
+scripts/laguna_vllm_gateway.sh
+```
+
+Request the gateway directly:
+
+```bash
+curl -s http://127.0.0.1:8080/generate \
+  -H 'Content-Type: application/json' \
+  -d '{"inputs":{"image":"data:image/png;base64,...","question":"What is shown?","max_new_tokens":64}}'
+```
+
+Validate locally against the existing HF/Transformers path:
+
+```bash
+laguna-vision-vllm validate \
+  --checkpoint latest \
+  --manifest evals/live_capability_eval_80/probe/manifest.jsonl \
+  --output runs/evals/vllm_vs_hf.jsonl \
+  --vllm-base-url http://127.0.0.1:8000/v1 \
+  --model laguna-vision \
+  --limit 10 \
+  --device cuda \
+  --vision-device cuda
+```
+
+Smoke-test the exact vLLM feature the gateway depends on before running Laguna Vision through it:
+
+```bash
+laguna-vision-vllm smoke-prompt-embeds \
+  --vllm-base-url http://127.0.0.1:8000/v1 \
+  --model laguna-vision \
+  --hf-model runs/laguna-vlm/merged-laguna-vision
+```
+
+Validate a live Hugging Face endpoint against the live vLLM gateway:
+
+```bash
+HF_ENDPOINT_TOKEN=... \
+laguna-vision-vllm compare-endpoints \
+  --hf-endpoint https://your-endpoint.endpoints.huggingface.cloud \
+  --vllm-gateway-url http://127.0.0.1:8080 \
+  --manifest evals/live_capability_eval_80/probe/manifest.jsonl \
+  --output runs/evals/hf_endpoint_vs_vllm_gateway.jsonl \
+  --limit 10
+```
+
+Prime Intellect GPU validation pattern:
+
+```bash
+# Pick a single affordable GPU for prompt-embeds feature smoke tests.
+prime availability list --gpu-type A100_40GB --gpu-count 1
+
+prime pods create \
+  --id <availability-id> \
+  --name laguna-vllm-smoke \
+  --disk-size 100 \
+  --image vllm_llama_8b \
+  -y
+
+prime pods status <pod-id>
+prime pods ssh <pod-id>
+```
+
+Inside the pod, start a small public vLLM model with prompt embeds enabled:
+
+```bash
+vllm serve Qwen/Qwen2.5-0.5B-Instruct \
+  --served-model-name qwen-smoke \
+  --trust-remote-code \
+  --enable-prompt-embeds \
+  --max-model-len 2048 \
+  --host 0.0.0.0 \
+  --port 8000
+```
+
+In a second shell on the same pod, run:
+
+```bash
+python -m pip install -e '.[vllm-gateway]'
+laguna-vision-vllm smoke-prompt-embeds \
+  --vllm-base-url http://127.0.0.1:8000/v1 \
+  --model qwen-smoke \
+  --hf-model Qwen/Qwen2.5-0.5B-Instruct
+```
+
+For the full Laguna backend, use at least an 80GB GPU:
+
+```bash
+prime availability list --gpu-type H100_80GB --gpu-count 1
+# or A100_80GB when available
+```
+
+Only terminate the Prime pod after the smoke command returns `{"status": "ok", ...}` and any Laguna gateway comparison you need has finished:
+
+```bash
+prime pods terminate <pod-id> -y
 ```
 
 ## Repository layout

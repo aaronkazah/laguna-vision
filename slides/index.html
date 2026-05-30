@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Laguna Vision</title>
+<style>
+  :root{
+    --bg0:#ede9e0; --bg1:#f2efe8; --bg2:#e8e4db;
+    --green:#6fb800; --green-dim:#5a9a00; --green-light:#d4e8a5;
+    --ink:#1a1a1a; --muted:#6b6b6b; --line:rgba(0,0,0,.12);
+    --card:rgba(255,255,255,.6); --card-line:rgba(0,0,0,.10);
+    --warn:#c89200; --bad:#cc3333;
+    --s:1;
+  }
+  *{box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
+  html,body{margin:0;padding:0;background:var(--bg0);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Helvetica,Arial,sans-serif;}
+
+  /* SCREEN: one full-viewport slide at a time, scaled to fit */
+  html{scroll-behavior:smooth;}
+  body{height:100vh;overflow-y:scroll;scroll-snap-type:y mandatory;}
+  .deck{display:block;}
+  .slot{height:100vh;display:flex;align-items:center;justify-content:center;scroll-snap-align:center;scroll-snap-stop:always;}
+  .slide{transform:scale(var(--s));transform-origin:center center;}
+
+  .slide{
+    position:relative;width:1280px;height:720px;overflow:hidden;flex:0 0 auto;
+    background:var(--bg0);
+    border:none;border-radius:0;
+    box-shadow:none;
+    padding:64px 72px;display:flex;flex-direction:column;
+  }
+  /* decorative grid blocks */
+  .slide::before{content:"";position:absolute;right:0;top:0;width:340px;height:100%;pointer-events:none;
+    background:
+      repeating-linear-gradient(90deg,transparent,transparent 58px,var(--line) 58px,var(--line) 59px),
+      repeating-linear-gradient(180deg,transparent,transparent 58px,var(--line) 58px,var(--line) 59px);
+    mask:linear-gradient(180deg,rgba(0,0,0,.35) 0%,rgba(0,0,0,.08) 50%,rgba(0,0,0,.25) 100%);
+    -webkit-mask:linear-gradient(180deg,rgba(0,0,0,.35) 0%,rgba(0,0,0,.08) 50%,rgba(0,0,0,.25) 100%);
+  }
+  /* green accent bar on left — removed for flat design */
+  .slide::after{display:none;}
+
+  .eyebrow{font-size:15px;letter-spacing:.32em;text-transform:uppercase;color:var(--green);font-weight:700;}
+  .pageno{position:absolute;right:40px;bottom:28px;font-size:13px;color:var(--muted);letter-spacing:.18em;}
+  .brand{position:absolute;left:40px;bottom:28px;font-size:13px;color:var(--muted);letter-spacing:.18em;}
+  .brand b{color:var(--ink);}
+
+  h1{font-size:50px;line-height:1.05;margin:14px 0 0;font-weight:800;letter-spacing:-.01em;}
+  h2{font-size:42px;line-height:1.08;margin:10px 0 0;font-weight:800;letter-spacing:-.01em;color:var(--green);}
+  .lead{font-size:23px;line-height:1.5;color:var(--muted);margin:18px 0 0;max-width:980px;}
+  .accent{color:var(--green);} .sky{color:var(--green-dim);}
+
+  /* TITLE SLIDE */
+  .hero{justify-content:center;}
+  .hero .mega{font-size:104px;line-height:.96;font-weight:850;letter-spacing:-.02em;margin:8px 0 0;color:var(--ink);}
+  .hero .sub{font-size:27px;color:var(--muted);margin-top:22px;font-weight:600;}
+  .hero .sub span{color:var(--green);font-weight:600;}
+  .chiprow{display:flex;gap:12px;flex-wrap:wrap;margin-top:34px;}
+  .chip{font-size:14px;color:var(--ink);background:transparent;border:2px solid var(--ink);
+    padding:10px 20px;border-radius:999px;letter-spacing:.08em;text-transform:uppercase;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:600;}
+  .chip b{color:var(--green);font-weight:700;}
+
+  /* PIPELINE */
+  .flow{display:flex;align-items:stretch;gap:0;margin-top:40px;}
+  .node{flex:1;background:transparent;border:none;border-radius:0;padding:20px 18px;min-height:172px;display:flex;flex-direction:column;}
+  .node .k{font-size:13px;letter-spacing:.18em;text-transform:uppercase;color:var(--green);font-weight:700;}
+  .node .t{font-size:22px;font-weight:750;margin-top:10px;line-height:1.15;}
+  .node .d{font-size:14.5px;color:var(--muted);margin-top:10px;line-height:1.42;}
+  .arrow{flex:0 0 44px;display:flex;align-items:center;justify-content:center;color:var(--green);font-size:30px;font-weight:700;}
+  .stages{display:flex;gap:18px;margin-top:34px;}
+  .stage{flex:1;background:transparent;
+    border:none;border-radius:0;padding:22px 22px;}
+  .stage h3{margin:0;font-size:22px;font-weight:780;}
+  .stage .tag{font-size:13px;color:var(--green);font-weight:700;letter-spacing:.14em;text-transform:uppercase;}
+  .stage p{margin:10px 0 0;font-size:16px;color:var(--muted);line-height:1.45;}
+  .stage .froz{color:var(--warn);} .stage .train{color:var(--green);}
+
+  /* GENERIC COLUMNS */
+  .cols{display:flex;gap:22px;margin-top:34px;flex:1;}
+  .col{flex:1;background:transparent;border:none;border-radius:0;padding:24px 24px;}
+  .col h3{margin:0 0 6px;font-size:20px;font-weight:780;}
+  .col .ic{font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:var(--green);font-weight:700;}
+  ul.clean{margin:14px 0 0;padding:0;list-style:none;}
+  ul.clean li{position:relative;padding-left:22px;margin:0 0 12px;font-size:16.5px;color:var(--ink);line-height:1.42;}
+  ul.clean li::before{content:"";position:absolute;left:0;top:9px;width:8px;height:8px;border-radius:50%;
+    background:var(--green);}
+  ul.clean li small{color:var(--muted);}
+
+  /* METRICS */
+  .metrics{display:flex;gap:18px;margin-top:30px;}
+  .metric{flex:1;background:transparent;border:none;border-radius:0;padding:22px;text-align:center;}
+  .metric .v{font-size:46px;font-weight:850;color:var(--green);line-height:1;letter-spacing:-.02em;}
+  .metric .v.warn{color:var(--warn);}
+  .metric .l{font-size:14px;color:var(--muted);margin-top:10px;letter-spacing:.04em;}
+
+  /* TABLE */
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:26px;}
+  .cell{background:transparent;border:1px solid var(--line);border-radius:0;padding:14px 16px;}
+  .cell .c{font-size:14px;color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;}
+  .cell .s{font-size:26px;font-weight:800;margin-top:6px;}
+  .s.good{color:var(--green);} .s.mid{color:var(--warn);} .s.zero{color:var(--bad);}
+
+  .note{margin-top:auto;font-size:15px;color:var(--muted);border-top:1px solid var(--line);padding-top:16px;line-height:1.45;}
+  .note b{color:var(--ink);}
+
+  /* DEMOS */
+  .demos{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:30px;flex:1;}
+  .demo{background:transparent;border:none;border-radius:0;padding:20px 22px;display:flex;flex-direction:column;}
+  .demo .n{font-size:13px;font-weight:800;color:#fff;background:var(--green);width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;}
+  .demo h3{margin:12px 0 0;font-size:20px;font-weight:780;}
+  .demo p{margin:8px 0 0;font-size:15.5px;color:var(--muted);line-height:1.42;}
+
+  /* NAV (screen only) */
+  .nav{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:50;
+    display:flex;align-items:center;gap:14px;background:rgba(255,255,255,.85);backdrop-filter:blur(8px);
+    border:1px solid var(--line);border-radius:999px;padding:8px 14px;box-shadow:0 4px 20px rgba(0,0,0,.08);}
+  .nav button{all:unset;cursor:pointer;color:var(--ink);font-size:18px;width:32px;height:32px;
+    display:flex;align-items:center;justify-content:center;border-radius:50%;}
+  .nav button:hover{background:rgba(111,184,0,.15);color:var(--green);}
+  .nav .count{font-size:13px;color:var(--muted);letter-spacing:.16em;min-width:58px;text-align:center;font-variant-numeric:tabular-nums;}
+  .hint{position:fixed;right:20px;top:18px;z-index:50;font-size:12px;color:var(--muted);letter-spacing:.14em;
+    background:rgba(255,255,255,.75);border:1px solid var(--line);border-radius:999px;padding:6px 12px;}
+
+  /* PRINT: one pixel-perfect 16:9 page per slide */
+  @media print{
+    @page{size:1280px 720px;margin:0;}
+    html,body{background:var(--bg0);height:auto;overflow:visible;}
+    .deck{display:block;}
+    .slot{display:contents;}
+    .slide{transform:none !important;border-radius:0;border:none;box-shadow:none;margin:0;
+      page-break-after:always;break-after:page;}
+    .slide:last-child{page-break-after:auto;}
+    .nav,.hint{display:none !important;}
+  }
+</style>
+</head>
+<body>
+<div class="deck">
+
+  <div class="slot"><section class="slide hero">
+    <div class="eyebrow">Post-training multimodal adaptation · SFT</div>
+    <div class="mega">Laguna Vision</div>
+    <div class="sub">A visual input path for <span>poolside/Laguna-XS.2</span></div>
+    <p class="lead">Trained on a <span class="accent">300k-example general vision recipe</span> from 13 public sources — the model learns to identify objects, read documents, parse charts, understand screenshots and UIs, and answer visual questions grounded in what it sees. Early — but the full pipeline is working end to end.</p>
+    <div class="chiprow">
+      <span class="chip"><b>SigLIP</b> so400m-384 (vision encoder)</span>
+      <span class="chip"><b>AnyRes</b> global + 4 tiles (multi-scale)</span>
+      <span class="chip"><b>Resampler</b> · 256 tokens (projector)</span>
+      <span class="chip"><b>LoRA</b> r64 / a128 (parameter-efficient fine-tuning)</span>
+      <span class="chip"><b>vLLM</b> serving (inference)</span>
+      <span class="chip"><b>300k</b> examples (documents, OCR, charts, screenshots, UIs, natural images)</span>
+    </div>
+    <span class="brand"><b>Laguna Vision</b> · model card</span>
+    <span class="pageno">01 / 08</span>
+  </section></div>
+
+  <div class="slot"><section class="slide">
+    <div class="eyebrow">The limit</div>
+    <h2>Laguna XS.2 is text-only.</h2>
+    <p class="lead">For real computer use that is a hard wall. The state an agent needs lives in a <span class="accent">screenshot, a browser page, a form, a chart, a terminal, or an error dialog</span> — not in the prompt. Today a human has to transcribe it.</p>
+    <div class="cols">
+      <div class="col">
+        <div class="ic">Without vision</div>
+        <h3>Blind to the screen</h3>
+        <ul class="clean">
+          <li>No sensor for pixels</li>
+          <li>No learned bridge from pixels into the token stream</li>
+          <li>Guesses or refuses when the answer is on screen</li>
+        </ul>
+      </div>
+      <div class="col">
+        <div class="ic">Laguna Vision adds</div>
+        <h3>The missing interface</h3>
+        <ul class="clean">
+          <li>Visual sensing over screenshots &amp; documents</li>
+          <li>A token bridge into Laguna's embedding space</li>
+          <li>The backbone is adapted — not a captioner bolted on the side</li>
+        </ul>
+      </div>
+    </div>
+    <span class="brand"><b>Laguna Vision</b></span>
+    <span class="pageno">02 / 08</span>
+  </section></div>
+
+  <div class="slot"><section class="slide">
+    <div class="eyebrow">Vision pathway · end to end</div>
+    <h2>From pixels to a grounded answer</h2>
+    <div class="flow">
+      <div class="node">
+        <div class="k">Sense</div>
+        <div class="t">SigLIP encoder</div>
+        <div class="d">AnyRes global view + up to 4 high-detail tiles preserve screenshot &amp; document detail.</div>
+      </div>
+      <div class="arrow">›</div>
+      <div class="node">
+        <div class="k">Bridge</div>
+        <div class="t">Resampler projector</div>
+        <div class="d">Maps visual features into <b style="color:var(--green)">256 Laguna-space tokens</b>.</div>
+      </div>
+      <div class="arrow">›</div>
+      <div class="node">
+        <div class="k">Condition</div>
+        <div class="t">Laguna token stream</div>
+        <div class="d">Visual tokens sit beside text; the language backbone reasons over both.</div>
+      </div>
+      <div class="arrow">›</div>
+      <div class="node">
+        <div class="k">Answer</div>
+        <div class="t">Grounded output</div>
+        <div class="d">Audited by 80 deterministic live probes with raw payloads.</div>
+      </div>
+    </div>
+    <p class="lead" style="margin-top:30px;font-size:19px">Two-stage supervised fine-tuning adapts the model itself — not a captioner bolted on the side.</p>
+    <span class="brand"><b>Laguna Vision</b></span>
+    <span class="pageno">03 / 08</span>
+  </section></div>
+
+  <div class="slot"><section class="slide">
+    <div class="eyebrow">Data recipe · general-vision-300k-v1</div>
+    <h2>300k examples from 13 public sources</h2>
+    <div class="cols" style="margin-top:24px;">
+      <div class="col">
+        <div class="ic">Stage 1 · Alignment · 120k</div>
+        <h3>LLaVA-Pretrain-558k</h3>
+        <ul class="clean">
+          <li>BLIP captions over LAION / CC / SBU images</li>
+          <li>Teaches the projector to land visual features in Laguna's embedding space</li>
+          <li>Backbone stays <b style="color:var(--warn)">frozen</b> — only the resampler trains</li>
+        </ul>
+      </div>
+      <div class="col">
+        <div class="ic">Stage 2 · Instruction · 180k</div>
+        <h3>12 diverse visual-QA sources</h3>
+        <ul class="clean">
+          <li><b>General perception</b> — LLaVA-Instruct 65k + ShareGPT4V 35k <small>(COCO train2017)</small></li>
+          <li><b>Compositional QA</b> — GQA 25k <small>(objects, attributes, spatial)</small></li>
+          <li><b>Documents &amp; OCR</b> — DocumentVQA 7k · TextVQA 7k · OCR-VQA 6k · ChartQA 5k</li>
+          <li><b>UI &amp; screenshots</b> — WebSight 10k · RICO-ScreenQA 7k · Screen2Words 4k · WebSRC 4k</li>
+          <li><b>Synthetic controls</b> — Spatial-OCR 5k <small>(positional grounding)</small></li>
+        </ul>
+      </div>
+    </div>
+    <p class="note">All sourced from HuggingFace Hub and public datasets. Every example is image + question + answer. The recipe, manifests, and download scripts are committed in <b>lagunavision/data/</b>.</p>
+    <span class="brand"><b>Laguna Vision</b></span>
+    <span class="pageno">04 / 08</span>
+  </section></div>
+
+  <div class="slot"><section class="slide">
+    <div class="eyebrow">Training · two-stage SFT</div>
+    <h2>How we train it</h2>
+    <div class="stages">
+      <div class="stage">
+        <div class="tag">Stage 1 · Align</div>
+        <h3>Projector only</h3>
+        <p>Laguna stays <span class="froz">frozen</span>. Train just the projector to land visual features in the right space.</p>
+      </div>
+      <div class="stage">
+        <div class="tag">Stage 2 · Instruct</div>
+        <h3>Projector + LoRA</h3>
+        <p><span class="train">Train</span> projector plus LoRA adapters on image–question–answer and visual-instruction data.</p>
+      </div>
+    </div>
+    <div class="metrics">
+      <div class="metric"><div class="v">300k</div><div class="l">total examples<br>120k align + 180k instruct</div></div>
+      <div class="metric"><div class="v">13</div><div class="l">public sources<br>HuggingFace Hub + COCO</div></div>
+      <div class="metric"><div class="v">256</div><div class="l">visual tokens<br>resampler projector</div></div>
+      <div class="metric"><div class="v warn">12/80</div><div class="l">strict live passes<br>weakly grounded, early</div></div>
+    </div>
+    <p class="note">The whole path is <b>inspectable and reproducible</b>: data recipe, manifests, training scripts, checkpoint lineage, endpoint code, and raw eval answers are all committed.</p>
+    <span class="brand"><b>Laguna Vision</b></span>
+    <span class="pageno">05 / 08</span>
+  </section></div>
+
+  <div class="slot"><section class="slide">
+    <div class="eyebrow">Live capability matrix · 8 categories × 10 cases</div>
+    <h2>What it can and can't do yet</h2>
+    <div class="grid">
+      <div class="cell"><div class="c">basic_color</div><div class="s mid">3 / 10</div></div>
+      <div class="cell"><div class="c">basic_shape</div><div class="s mid">2 / 10</div></div>
+      <div class="cell"><div class="c">meme_semantics</div><div class="s mid">3 / 10</div></div>
+      <div class="cell"><div class="c">no_text_control</div><div class="s mid">3 / 10</div></div>
+      <div class="cell"><div class="c">color_shape_binding</div><div class="s zero">1 / 10</div></div>
+      <div class="cell"><div class="c">tiny_ocr</div><div class="s zero">0 / 10</div></div>
+      <div class="cell"><div class="c">dense_ui_localization</div><div class="s zero">0 / 10</div></div>
+      <div class="cell"><div class="c">table_precision</div><div class="s zero">0 / 10</div></div>
+    </div>
+    <div class="cols" style="margin-top:24px;flex:0;">
+      <div class="col"><div class="ic">Emerging</div><h3 style="color:var(--warn)">Coarse perception</h3><p style="color:var(--muted);font-size:16px;margin-top:8px;line-height:1.45">Single-object color &amp; shape, simple visual relationships, abstaining on blank inputs.</p></div>
+      <div class="col"><div class="ic">Not yet reliable</div><h3 style="color:var(--bad)">Precise reading</h3><p style="color:var(--muted);font-size:16px;margin-top:8px;line-height:1.45">Small OCR, dense UI localization, exact table/document values, color↔shape binding.</p></div>
+    </div>
+    <p class="note">Every prompt, expected answer, raw endpoint payload, extracted answer and score lives in <b>evals/live_capability_eval_80/</b>.</p>
+    <span class="brand"><b>Laguna Vision</b></span>
+    <span class="pageno">06 / 08</span>
+  </section></div>
+
+  <div class="slot"><section class="slide">
+    <div class="eyebrow">Serving · vLLM path</div>
+    <h2>Two-process production serving</h2>
+    <div class="flow" style="margin-top:34px;">
+      <div class="node">
+        <div class="k">Client</div>
+        <div class="t">Image + question</div>
+        <div class="d">POST <b style="color:var(--green)">/generate</b> to the gateway (URL or base64 image).</div>
+      </div>
+      <div class="arrow">›</div>
+      <div class="node">
+        <div class="k" style="color:var(--green)">Process A · :8080</div>
+        <div class="t">Vision gateway</div>
+        <div class="d">Computes SigLIP → AnyRes → resampler <b style="color:var(--green)">prompt embeddings</b>, then forwards.</div>
+      </div>
+      <div class="arrow">›</div>
+      <div class="node">
+        <div class="k" style="color:var(--green-dim)">Process B · :8000</div>
+        <div class="t">vLLM text backend</div>
+        <div class="d">Serves Laguna with <b style="color:var(--green-dim)">--enable-prompt-embeds</b>; LoRA merged or hot-loaded.</div>
+      </div>
+    </div>
+    <div class="cols" style="margin-top:26px;flex:0;">
+      <div class="col"><div class="ic">LoRA</div><h3 style="font-size:18px">Merge or hot-load</h3><p style="color:var(--muted);font-size:15px;margin-top:8px;line-height:1.4"><b style="color:var(--ink)">merge-lora</b> into the base for the simplest backend, or run <b style="color:var(--ink)">--enable-lora --lora-modules</b>.</p></div>
+      <div class="col"><div class="ic">Trust</div><h3 style="font-size:18px">Parity with HF path</h3><p style="color:var(--muted);font-size:15px;margin-top:8px;line-height:1.4"><b style="color:var(--ink)">validate</b> vs Transformers and <b style="color:var(--ink)">compare-endpoints</b> vs the live HF endpoint on the 80-probe set.</p></div>
+      <div class="col"><div class="ic">Reference</div><h3 style="font-size:18px">HF endpoint stays</h3><p style="color:var(--muted);font-size:15px;margin-top:8px;line-height:1.4">Dedicated A100 endpoint with <b style="color:var(--ink)">handler.py</b> remains the ground-truth path.</p></div>
+    </div>
+    <span class="brand"><b>Laguna Vision</b></span>
+    <span class="pageno">07 / 08</span>
+  </section></div>
+
+  <div class="slot"><section class="slide">
+    <div class="eyebrow">Demo ideas</div>
+    <h2>Show the pixels changing the answer</h2>
+    <div class="demos">
+      <div class="demo">
+        <div class="n">1</div>
+        <h3>Text-only vs Vision, side by side</h3>
+        <p>Same screenshot question to Laguna XS.2 (refuses / guesses) and Laguna Vision (uses the pixels). The bridge is the whole point — make it visible.</p>
+      </div>
+      <div class="demo">
+        <div class="n">2</div>
+        <h3>Agent reads browser state</h3>
+        <p>Feed a live webpage / dashboard capture: "what's the primary CTA?", "is this form valid?", "which row is failing?" — the target workflow.</p>
+      </div>
+      <div class="demo">
+        <div class="n">3</div>
+        <h3>Terminal error triage</h3>
+        <p>Drop a terminal screenshot with a stack trace and ask for the failing command and likely cause — state an agent usually needs a human to transcribe.</p>
+      </div>
+      <div class="demo">
+        <div class="n">4</div>
+        <h3>Ablation: blind / OCR / visual</h3>
+        <p>Run eval-ablation live — blind-text vs OCR-only vs trained-visual vs untrained-control — to prove the visual tokens carry the signal, honestly.</p>
+      </div>
+    </div>
+    <p class="note">Bonus: a <b>vLLM gateway latency demo</b> — image → embeddings → vLLM — and the <b>80-probe grounding audit</b> streaming raw payloads for a transparency story.</p>
+    <span class="brand"><b>Laguna Vision</b> · poolside/Laguna-XS.2</span>
+    <span class="pageno">08 / 08</span>
+  </section></div>
+
+</div>
+
+<div class="hint">← → / SPACE to navigate</div>
+<div class="nav">
+  <button id="prev" aria-label="Previous">‹</button>
+  <span class="count" id="count">01 / 08</span>
+  <button id="next" aria-label="Next">›</button>
+</div>
+
+<script>
+  const slots = Array.from(document.querySelectorAll('.slot'));
+  const count = document.getElementById('count');
+  const pad = n => String(n).padStart(2,'0');
+
+  function fit(){
+    const s = Math.min(window.innerWidth/1280, window.innerHeight/720) * 0.94;
+    document.documentElement.style.setProperty('--s', s.toFixed(4));
+  }
+  window.addEventListener('resize', fit); fit();
+
+  let current = 0;
+  function go(i){
+    current = Math.max(0, Math.min(slots.length-1, i));
+    slots[current].scrollIntoView({behavior:'smooth'});
+    count.textContent = pad(current+1)+' / '+pad(slots.length);
+  }
+  document.getElementById('next').onclick = () => go(current+1);
+  document.getElementById('prev').onclick = () => go(current-1);
+  window.addEventListener('keydown', e => {
+    if(['ArrowRight','ArrowDown',' ','PageDown'].includes(e.key)){ e.preventDefault(); go(current+1); }
+    if(['ArrowLeft','ArrowUp','PageUp'].includes(e.key)){ e.preventDefault(); go(current-1); }
+  });
+  // keep counter in sync with manual scroll
+  const io = new IntersectionObserver(es => {
+    es.forEach(en => { if(en.isIntersecting){ current = slots.indexOf(en.target);
+      count.textContent = pad(current+1)+' / '+pad(slots.length); } });
+  }, {threshold:0.6});
+  slots.forEach(s => io.observe(s));
+</script>
+</body>
+</html>

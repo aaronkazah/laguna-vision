@@ -17,10 +17,32 @@ llama = ["torch>=2.3", "torchvision>=0.18", "transformers>=5.9,<6", "accelerate>
 data = ["datasets>=2.20", "huggingface_hub>=0.24", "pillow>=10.0"]
 web = ["playwright>=1.48"]
 publish = ["huggingface_hub>=0.24"]
+vllm-gateway = [
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.30",
+    "pillow>=10.0",
+    "torch>=2.3",
+    "transformers>=4.49",
+    "peft>=0.18,<0.19",
+    "huggingface_hub>=0.24",
+    "safetensors>=0.4",
+]
+vllm = [
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.30",
+    "vllm>=0.8",
+    "pillow>=10.0",
+    "torch>=2.3",
+    "transformers>=4.49",
+    "peft>=0.18,<0.19",
+    "huggingface_hub>=0.24",
+    "safetensors>=0.4",
+]
 
 [project.scripts]
 laguna-vision = "lagunavision.cli:main"
 lagunavision = "lagunavision.cli:main"
+laguna-vision-vllm = "lagunavision.serve.vllm.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["lagunavision*"]

@@ -84,7 +84,39 @@ Use the default Hugging Face Dedicated Inference Endpoint Python runtime with th
 | Environment | `LAGUNA_CHECKPOINT_PATH=latest`, `LAGUNA_MODEL_ID=poolside/Laguna-XS.2`, `LAGUNA_MAX_NEW_TOKENS=128` |
 | Secret | `HF_TOKEN` with base-model access if required |
 
-Simple request:
+In the Hugging Face Inference Endpoint UI, paste one of these objects into the JSON body editor. A plain text payload such as `{"inputs": "Hello world!"}` is not enough; Laguna Vision needs `inputs.image` plus `inputs.question`.
+
+Quick HF UI test payload:
+
+```json
+{
+  "inputs": {
+    "image": "https://images.cocodataset.org/val2017/000000039769.jpg",
+    "question": "What animals are in this image? Answer briefly.",
+    "max_new_tokens": 64
+  }
+}
+```
+
+Same payload with `curl`:
+
+```bash
+HF_ENDPOINT=https://your-endpoint.endpoints.huggingface.cloud
+HF_ENDPOINT_TOKEN=...
+
+curl -s "${HF_ENDPOINT}" \
+  -H "Authorization: Bearer ${HF_ENDPOINT_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "inputs": {
+      "image": "https://images.cocodataset.org/val2017/000000039769.jpg",
+      "question": "What animals are in this image? Answer briefly.",
+      "max_new_tokens": 64
+    }
+  }'
+```
+
+Generic request:
 
 ```json
 {
@@ -94,6 +126,29 @@ Simple request:
     "max_new_tokens": 128
   }
 }
+```
+
+Local image as a data URI:
+
+```bash
+IMAGE_DATA_URI="$(python3 - <<'PY'
+import base64
+from pathlib import Path
+
+print("data:image/png;base64," + base64.b64encode(Path("path/to/image.png").read_bytes()).decode("ascii"))
+PY
+)"
+
+curl -s "${HF_ENDPOINT}" \
+  -H "Authorization: Bearer ${HF_ENDPOINT_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"inputs\": {
+      \"image\": \"${IMAGE_DATA_URI}\",
+      \"question\": \"What is shown in this image?\",
+      \"max_new_tokens\": 64
+    }
+  }"
 ```
 
 OpenAI-style multimodal request:
@@ -119,6 +174,17 @@ Response:
 ```json
 {"answer": "...", "checkpoint": "latest"}
 ```
+
+## vLLM serving
+
+For production vLLM serving, keep this HF endpoint as the reference path and run the repository gateway separately:
+
+1. Merge `latest/lora` into `poolside/Laguna-XS.2` with `laguna-vision-vllm merge-lora`, or start vLLM with `--enable-lora --lora-modules laguna-vision=latest/lora`.
+2. Start vLLM with `--trust-remote-code --enable-prompt-embeds`.
+3. Start `laguna-vision-vllm serve --checkpoint latest --vllm-base-url http://127.0.0.1:8000/v1 --model laguna-vision`.
+4. Compare this endpoint and the vLLM gateway with `laguna-vision-vllm compare-endpoints` on `evals/live_capability_eval_80/probe/manifest.jsonl`.
+
+The gateway sends a single full embedding tensor to vLLM's `/v1/completions` API using top-level `prompt_embeds`; it does not send `prompt_embeds` as a chat content part. Prime validation on 2026-05-30 confirmed this vLLM API works on `vllm==0.10.2`. The real `poolside/Laguna-XS.2` backend needs an 80GB-class GPU or equivalent memory plan; a 1x A100 40GB pod reached the correct vLLM Transformers backend and then failed with CUDA OOM.
 
 ## Limitations
 
