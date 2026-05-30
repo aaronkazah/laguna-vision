@@ -14,7 +14,7 @@ dependencies = []
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "pillow>=10.0"]
 llama = ["torch>=2.3", "torchvision>=0.18", "transformers>=5.9,<6", "accelerate>=0.34", "bitsandbytes>=0.43", "peft>=0.18,<0.19"]
-data = ["datasets>=2.20", "pillow>=10.0"]
+data = ["datasets>=2.20", "huggingface_hub>=0.24", "pillow>=10.0"]
 web = ["playwright>=1.48"]
 publish = ["huggingface_hub>=0.24"]
 

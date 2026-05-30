@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from lagunavision.types import EvalManifestItem, ScoreBreakdown
 
 
@@ -19,9 +21,12 @@ CAUSE_TERMS = (
 
 def score_answer(item: EvalManifestItem, answer: str) -> ScoreBreakdown:
     normalized = answer.casefold()
-    read_key_text = any(term.casefold() in normalized for term in item.must_include)
+    key_matches = [term.casefold() in normalized for term in item.must_include]
+    read_key_text = all(key_matches) if item.must_include_mode == "all" else any(key_matches)
     gave_fix = any(term.casefold() in normalized for term in item.accepted_fix_terms)
     violated_negative = any(term.casefold() in normalized for term in item.must_not_include)
+    if item.max_answer_words > 0 and len(re.findall(r"\b[\w.$:-]+\b", answer)) > item.max_answer_words:
+        violated_negative = True
     if item.rubric == "vqa":
         identified_cause = read_key_text
         gave_fix = read_key_text

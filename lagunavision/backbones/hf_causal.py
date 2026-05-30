@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import importlib
+import os
+import subprocess
+import sys
 from contextlib import AbstractContextManager, nullcontext
 from pathlib import Path
 from typing import Any
@@ -13,6 +17,125 @@ from lagunavision.backbones.base import (
 )
 from lagunavision.devices import resolve_torch_device
 from lagunavision.train.batching import pad_visual_batch
+
+
+def _ensure_laguna_runtime_dependencies() -> None:
+    if os.environ.get("LAGUNA_DISABLE_RUNTIME_BOOTSTRAP") == "1":
+        return
+    try:
+        import transformers
+
+        major = int(transformers.__version__.split(".", 1)[0])
+        if major >= 5:
+            return
+    except Exception:
+        pass
+
+    target = Path(os.environ.get("LAGUNA_RUNTIME_DEPS_DIR", "/tmp/laguna_runtime_deps"))
+    marker = target / ".laguna_runtime_ready"
+    if not marker.exists():
+        target.mkdir(parents=True, exist_ok=True)
+        packages = [
+            "accelerate==1.13.0",
+            "huggingface_hub==1.17.0",
+            "peft==0.18.1",
+            "safetensors==0.7.0",
+            "sentencepiece>=0.2.0",
+            "tokenizers==0.22.2",
+            "transformers[audio,sentencepiece,sklearn,vision]==5.9.0",
+        ]
+        subprocess.check_call(
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                "--quiet",
+                "--no-cache-dir",
+                "--upgrade",
+                "--target",
+                str(target),
+                *packages,
+            ]
+        )
+        marker.write_text("ok", encoding="utf-8")
+
+    target_str = str(target)
+    if target_str not in sys.path:
+        sys.path.insert(0, target_str)
+    for name in list(sys.modules):
+        if name in {"transformers", "huggingface_hub", "peft", "accelerate", "tokenizers"} or name.startswith(
+            ("transformers.", "huggingface_hub.", "peft.", "accelerate.", "tokenizers.")
+        ):
+            sys.modules.pop(name, None)
+    importlib.invalidate_caches()
+
+
+def _install_torch_compat_shims() -> None:
+    try:
+        import torch._dynamo._trace_wrapped_higher_order_op as trace_wrapped
+
+        if not hasattr(trace_wrapped, "TransformGetItemToIndex"):
+            class TransformGetItemToIndex:  # noqa: N801 - mirrors PyTorch internal name
+                pass
+
+            trace_wrapped.TransformGetItemToIndex = TransformGetItemToIndex
+    except Exception:
+        pass
+
+    try:
+        import torch.nn.attention.flex_attention as flex_attention
+
+        if not hasattr(flex_attention, "AuxRequest"):
+            class AuxRequest:  # noqa: N801 - mirrors PyTorch internal name
+                pass
+
+            flex_attention.AuxRequest = AuxRequest
+    except Exception:
+        pass
+
+
+def _install_huggingface_hub_dataclasses_shim() -> None:
+    """Provide compatibility for Laguna remote code on HF Endpoint runtimes."""
+    try:
+        import transformers.configuration_utils as configuration_utils
+
+        if not hasattr(configuration_utils, "PreTrainedConfig") and hasattr(
+            configuration_utils, "PretrainedConfig"
+        ):
+            configuration_utils.PreTrainedConfig = configuration_utils.PretrainedConfig
+    except ImportError:
+        pass
+
+    try:
+        import transformers.modeling_rope_utils as rope_utils
+
+        if not hasattr(rope_utils, "RopeParameters"):
+            rope_utils.RopeParameters = dict
+    except ImportError:
+        pass
+
+    try:
+        import huggingface_hub.dataclasses  # noqa: F401
+
+        return
+    except ModuleNotFoundError as exc:
+        if exc.name != "huggingface_hub.dataclasses":
+            raise
+
+    import sys
+    import types
+
+    module = types.ModuleType("huggingface_hub.dataclasses")
+
+    def strict(cls=None, *, accept_kwargs: bool = False):
+        def wrap(target):
+            return target
+
+        return wrap(cls) if cls is not None else wrap
+
+    module.strict = strict
+    sys.modules["huggingface_hub.dataclasses"] = module
 
 
 class HfCausalBackbone(Backbone):
@@ -151,12 +274,16 @@ class HfCausalBackbone(Backbone):
         return pad_visual_batch(sequences, label_sequences)
 
     def _load_sync(self) -> None:
+        _ensure_laguna_runtime_dependencies()
+        _install_torch_compat_shims()
+        _install_huggingface_hub_dataclasses_shim()
         try:
             import torch
             from transformers import AutoModelForCausalLM, AutoTokenizer
         except ImportError as exc:
             raise RuntimeError(
-                "Install backbone dependencies with `python -m pip install -e '.[llama]'`."
+                "Install backbone dependencies with `python -m pip install -e '.[llama]'`: "
+                f"{type(exc).__name__}: {exc}"
             ) from exc
 
         resolved_device = resolve_torch_device(self.device)

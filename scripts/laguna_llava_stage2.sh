@@ -2,11 +2,12 @@
 # LLaVA-compatible visual instruction tuning for Laguna.
 set -euo pipefail
 
-: "${LAGUNA_VLM_ROOT:?Set LAGUNA_VLM_ROOT to the mounted Prime persistent disk path.}"
+: "${LAGUNA_VLM_ROOT:?Set LAGUNA_VLM_ROOT to a persistent run root, for example ${PWD}/runs/laguna-vlm.}"
 
-if [[ "${ALLOW_POD_LOCAL_OUTPUT:-0}" != "1" && "${LAGUNA_VLM_ROOT}" != /mnt/* && "${LAGUNA_VLM_ROOT}" != /workspace/* && "${LAGUNA_VLM_ROOT}" != /prime/* ]]; then
+ALLOW_LOCAL_OUTPUT="${ALLOW_LOCAL_OUTPUT:-${ALLOW_POD_LOCAL_OUTPUT:-0}}"
+if [[ "${ALLOW_LOCAL_OUTPUT}" != "1" && "${LAGUNA_VLM_ROOT}" != /mnt/* && "${LAGUNA_VLM_ROOT}" != /workspace/* && "${LAGUNA_VLM_ROOT}" != /prime/* && "${LAGUNA_VLM_ROOT}" != /data/* ]]; then
   echo "Refusing to write production checkpoints outside a mounted persistent path: ${LAGUNA_VLM_ROOT}" >&2
-  echo "Set ALLOW_POD_LOCAL_OUTPUT=1 only for local smoke tests." >&2
+  echo "Set ALLOW_LOCAL_OUTPUT=1 for local reproduction runs." >&2
   exit 2
 fi
 
@@ -28,6 +29,10 @@ max_items_args=()
 if [[ -n "${MAX_ITEMS:-}" ]]; then
   max_items_args=(--max-items "${MAX_ITEMS}")
 fi
+init_args=(--init-checkpoint "${INIT_CHECKPOINT:-${STAGE1_CHECKPOINT}}")
+if [[ -n "${INIT_LORA_DIR:-}" ]]; then
+  init_args+=(--init-lora-dir "${INIT_LORA_DIR}")
+fi
 
 NPROC="${NPROC}" "$(dirname "$0")/train_visual_bridge_ddp.sh" \
   --backbone laguna \
@@ -37,7 +42,7 @@ NPROC="${NPROC}" "$(dirname "$0")/train_visual_bridge_ddp.sh" \
   "${max_items_args[@]}" \
   --output-dir "${OUTPUT_DIR}" \
   --feature-cache-dir "${FEATURE_CACHE_DIR}" \
-  --init-checkpoint "${STAGE1_CHECKPOINT}" \
+  "${init_args[@]}" \
   --encoder hf \
   --encoder-id "${VISION_TOWER}" \
   --projector resampler \

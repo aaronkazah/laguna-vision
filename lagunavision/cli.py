@@ -3,17 +3,25 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 from pathlib import Path
 
 from lagunavision.backbones.factory import available_backbones, build_backbone
 from lagunavision.data.hf_materialize import DEFAULT_HF_DATASETS, materialize_hf_dataset, parse_dataset_requests
 from lagunavision.data.llava import materialize_llava_hf, materialize_llava_json
+from lagunavision.data.general_recipe import (
+    PILOT_300K_RECIPE,
+    materialize_general_recipe,
+    recipe_summary,
+)
 from lagunavision.data.manifest import load_manifest
 from lagunavision.data.sources import DATASET_SOURCES
 from lagunavision.defaults import DEFAULT_VISION_TOWER
 from lagunavision.data.spatial_ocr import generate_spatial_ocr_manifest
 from lagunavision.eval.ablation import AblationConfig, run_ablation
+from lagunavision.eval.capability_probe import CAPABILITY_PROBES, generate_capability_probe
 from lagunavision.eval.demo_set import generate_demo_eval
+from lagunavision.eval.endpoint_eval import EndpointEvalConfig, run_endpoint_eval
 from lagunavision.eval.run_eval import run_text_eval
 from lagunavision.eval.scene_probe import generate_scene_probe
 from lagunavision.eval.scene_probe import generate_scene_dataset
@@ -76,6 +84,10 @@ def main() -> None:
     demo_eval.add_argument("--output-dir", type=Path, required=True)
     demo_eval.set_defaults(func=_demo_eval)
 
+    capability_probe = subcommands.add_parser("capability-probe")
+    capability_probe.add_argument("--output-dir", type=Path, required=True)
+    capability_probe.set_defaults(func=_capability_probe)
+
     web_probe = subcommands.add_parser("web-probe")
     web_probe.add_argument("--output-dir", type=Path, required=True)
     web_probe.add_argument("--limit", type=int, default=5)
@@ -118,6 +130,18 @@ def main() -> None:
     llava_dataset.add_argument("--image-mode", choices=("reference", "copy", "symlink"), default="reference")
     llava_dataset.set_defaults(func=_llava_materialize)
 
+    general_dataset = subcommands.add_parser("general-materialize")
+    general_dataset.add_argument("--output-dir", type=Path, required=True)
+    general_dataset.add_argument("--recipe", default=PILOT_300K_RECIPE)
+    general_dataset.add_argument("--sample-per-source", type=int, default=0)
+    general_dataset.add_argument("--train-budget", type=int, default=0)
+    general_dataset.add_argument("--download-assets", action="store_true")
+    general_dataset.add_argument("--coco-train2017-root", type=Path)
+    general_dataset.add_argument("--llava-pretrain-image-root", type=Path)
+    general_dataset.add_argument("--seed", type=int, default=7)
+    general_dataset.add_argument("--dry-run", action="store_true")
+    general_dataset.set_defaults(func=_general_materialize)
+
     cache_features = subcommands.add_parser("cache-visual-features")
     cache_features.add_argument("--manifest", type=Path, required=True)
     cache_features.add_argument("--output-dir", type=Path, required=True)
@@ -135,6 +159,17 @@ def main() -> None:
     score_cmd.add_argument("--manifest", type=Path, required=True)
     score_cmd.add_argument("--answers", type=Path, required=True)
     score_cmd.set_defaults(func=_score)
+
+    eval_endpoint = subcommands.add_parser("eval-endpoint")
+    eval_endpoint.add_argument("--endpoint", required=True)
+    eval_endpoint.add_argument("--manifest", type=Path, required=True)
+    eval_endpoint.add_argument("--output", type=Path, required=True)
+    eval_endpoint.add_argument("--summary-output", type=Path)
+    eval_endpoint.add_argument("--token", default="")
+    eval_endpoint.add_argument("--max-new-tokens", type=int, default=64)
+    eval_endpoint.add_argument("--timeout", type=float, default=120.0)
+    eval_endpoint.add_argument("--limit", type=int, default=0)
+    eval_endpoint.set_defaults(func=_eval_endpoint)
 
     train_bridge = subcommands.add_parser("train-visual-bridge")
     train_bridge.add_argument("--manifest", type=Path, required=True)
@@ -252,6 +287,11 @@ def _demo_eval(args: argparse.Namespace) -> None:
     print(json.dumps({"manifest": str(manifest), "items": 15}))
 
 
+def _capability_probe(args: argparse.Namespace) -> None:
+    manifest = generate_capability_probe(args.output_dir)
+    print(json.dumps({"manifest": str(manifest), "items": len(CAPABILITY_PROBES)}))
+
+
 def _web_probe(args: argparse.Namespace) -> None:
     async def run() -> None:
         manifest = await generate_web_probe(args.output_dir, args.limit, width=args.width, height=args.height)
@@ -351,6 +391,36 @@ def _llava_materialize(args: argparse.Namespace) -> None:
     )
 
 
+def _general_materialize(args: argparse.Namespace) -> None:
+    if args.dry_run:
+        print(json.dumps(recipe_summary(args.recipe, sample_per_source=args.sample_per_source, train_budget=args.train_budget), indent=2))
+        return
+    result = materialize_general_recipe(
+        args.output_dir,
+        recipe=args.recipe,
+        sample_per_source=args.sample_per_source,
+        train_budget=args.train_budget,
+        download_assets=args.download_assets,
+        coco_train2017_root=args.coco_train2017_root,
+        llava_pretrain_image_root=args.llava_pretrain_image_root,
+        seed=args.seed,
+    )
+    print(
+        json.dumps(
+            {
+                "recipe_file": str(result.recipe_file),
+                "alignment_train_manifest": str(result.alignment_train_manifest),
+                "alignment_eval_manifest": str(result.alignment_eval_manifest),
+                "instruction_train_manifest": str(result.instruction_train_manifest),
+                "instruction_eval_manifest": str(result.instruction_eval_manifest),
+                "wrong_manifest": str(result.wrong_manifest),
+                "blank_manifest": str(result.blank_manifest),
+                "counts": dict(result.counts),
+            }
+        )
+    )
+
+
 def _cache_visual_features(args: argparse.Namespace) -> None:
     if args.num_shards < 1:
         raise SystemExit("--num-shards must be >= 1")
@@ -396,6 +466,34 @@ def _score(args: argparse.Namespace) -> None:
             total += 1
             passed += int(score.passed)
     print(json.dumps({"passed": passed, "total": total}))
+
+
+def _eval_endpoint(args: argparse.Namespace) -> None:
+    token = args.token or os.environ.get("HF_ENDPOINT_TOKEN", "") or os.environ.get("HF_TOKEN", "") or _cached_hf_token()
+    summary = run_endpoint_eval(
+        EndpointEvalConfig(
+            endpoint=args.endpoint,
+            manifest=args.manifest,
+            output=args.output,
+            summary_output=args.summary_output,
+            token=token,
+            max_new_tokens=args.max_new_tokens,
+            timeout=args.timeout,
+            limit=args.limit,
+        )
+    )
+    print(json.dumps(summary, indent=2, sort_keys=True))
+
+
+def _cached_hf_token() -> str:
+    for path in (Path.home() / ".cache" / "huggingface" / "token", Path.home() / ".huggingface" / "token"):
+        try:
+            token = path.read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
+        if token:
+            return token
+    return ""
 
 
 def _train_visual_bridge(args: argparse.Namespace) -> None:

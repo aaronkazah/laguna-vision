@@ -9,9 +9,14 @@ SSH_KEY="${SSH_KEY:-${HOME}/.ssh/prime_intellect}"
 REMOTE_REPO_DIR="${REMOTE_REPO_DIR:-~/laguna-vision}"
 MAX_RUNTIME="${MAX_RUNTIME:-8h}"
 RUN_NAME="${RUN_NAME:-laguna-vision-$(date -u +%Y%m%dT%H%M%SZ)}"
+REMOTE_JOB_SCRIPT="${REMOTE_JOB_SCRIPT:-scripts/prime_budget_training_job.sh}"
 REMOTE_HF_HOME="${HF_HOME:-${LAGUNA_VLM_ROOT}/hf_home}"
 PRIME_CONFIG_FILE="${PRIME_CONFIG_FILE:-${HOME}/.prime/config.json}"
 SSH_OPTS=(-i "${SSH_KEY}" -o StrictHostKeyChecking=accept-new)
+
+if [[ "${REMOTE_JOB_SCRIPT}" == *prime_general_vision_job.sh && -z "${DATA_DIR:-}" ]]; then
+  DATA_DIR="${LAGUNA_VLM_ROOT}/datasets/${DATASET_RECIPE:-general-vision-300k-v1}"
+fi
 
 rsync -az \
   -e "ssh ${SSH_OPTS[*]}" \
@@ -35,7 +40,7 @@ elif [[ -f "${HF_TOKEN_FILE:-${HOME}/.cache/huggingface/token}" ]]; then
   ssh "${SSH_OPTS[@]}" "${PRIME_SSH_TARGET}" "chmod 600 '${REMOTE_HF_HOME}/token'"
 fi
 
-if [[ "${TERMINATE_ON_EXIT:-0}" == "1" && -f "${PRIME_CONFIG_FILE}" ]]; then
+if [[ ( "${TERMINATE_ON_EXIT:-0}" == "1" || "${TERMINATE_AFTER_STAGE2_FINAL:-0}" == "1" ) && -f "${PRIME_CONFIG_FILE}" ]]; then
   ssh "${SSH_OPTS[@]}" "${PRIME_SSH_TARGET}" "mkdir -p ~/.prime && chmod 700 ~/.prime"
   rsync -az \
     -e "ssh ${SSH_OPTS[*]}" \
@@ -71,13 +76,14 @@ ssh "${SSH_OPTS[@]}" "${PRIME_SSH_TARGET}" "bash -lc '
   source venv/bin/activate
   python -m pip install -U pip >/tmp/laguna_vision_pip_upgrade.log
   python -m pip install -e \".[llama,data,publish]\" >/tmp/laguna_vision_install.log
-  if [[ \"${TERMINATE_ON_EXIT:-0}\" == \"1\" ]]; then
+  if [[ \"${TERMINATE_ON_EXIT:-0}\" == \"1\" || \"${TERMINATE_AFTER_STAGE2_FINAL:-0}\" == \"1\" ]]; then
     python -m pip install prime==0.5.42 >/tmp/laguna_vision_prime_install.log
   fi
   mkdir -p \"${LAGUNA_VLM_ROOT}/logs/${RUN_NAME}\"
   export LAGUNA_VLM_ROOT=\"${LAGUNA_VLM_ROOT}\"
   export MAX_RUNTIME=\"${MAX_RUNTIME}\"
   export RUN_NAME=\"${RUN_NAME}\"
+  export REMOTE_JOB_SCRIPT=\"${REMOTE_JOB_SCRIPT}\"
   export TRAIN_COUNT=\"${TRAIN_COUNT:-30000}\"
   export EVAL_COUNT=\"${EVAL_COUNT:-1000}\"
   export EVAL_LIMIT=\"${EVAL_LIMIT:-16}\"
@@ -93,8 +99,23 @@ ssh "${SSH_OPTS[@]}" "${PRIME_SSH_TARGET}" "bash -lc '
   export MAX_ITEMS=\"${MAX_ITEMS:-0}\"
   export NPROC=\"${NPROC:-8}\"
   export DATASET_KIND=\"${DATASET_KIND:-hf}\"
+  export DATASET_RECIPE=\"${DATASET_RECIPE:-general-vision-300k-v1}\"
+  export DATASET_SAMPLE_PER_SOURCE=\"${DATASET_SAMPLE_PER_SOURCE:-0}\"
+  export DATASET_TRAIN_BUDGET=\"${DATASET_TRAIN_BUDGET:-0}\"
   export DATA_DIR=\"${DATA_DIR:-${LAGUNA_VLM_ROOT}/datasets/hf_vqa}\"
+  export DOWNLOAD_ASSETS=\"${DOWNLOAD_ASSETS:-1}\"
+  export COCO_TRAIN2017_ROOT=\"${COCO_TRAIN2017_ROOT:-${LAGUNA_VLM_ROOT}/datasets/raw/coco/train2017}\"
+  export LLAVA_PRETRAIN_IMAGE_ROOT=\"${LLAVA_PRETRAIN_IMAGE_ROOT:-${LAGUNA_VLM_ROOT}/datasets/raw/llava_pretrain}\"
   export FEATURE_CACHE_DIR=\"${FEATURE_CACHE_DIR:-${LAGUNA_VLM_ROOT}/feature_cache/siglip-so400m-patch14-384-tiles${MAX_TILES:-1}}\"
+  export FEATURE_CACHE_ROOT=\"${FEATURE_CACHE_ROOT:-${LAGUNA_VLM_ROOT}/feature_cache/${DATASET_RECIPE:-general-vision-300k-v1}-siglip-so400m-tiles${MAX_TILES:-1}}\"
+  export STAGE1_OUTPUT_DIR=\"${STAGE1_OUTPUT_DIR:-${LAGUNA_VLM_ROOT}/checkpoints/${RUN_NAME}/stage1_alignment}\"
+  export STAGE2_OUTPUT_DIR=\"${STAGE2_OUTPUT_DIR:-${LAGUNA_VLM_ROOT}/checkpoints/${RUN_NAME}/stage2_instruction}\"
+  export STAGE1_EPOCHS=\"${STAGE1_EPOCHS:-1}\"
+  export STAGE1_LR=\"${STAGE1_LR:-1e-3}\"
+  export STAGE1_GRAD_ACCUM=\"${STAGE1_GRAD_ACCUM:-16}\"
+  export STAGE2_EPOCHS=\"${STAGE2_EPOCHS:-1}\"
+  export STAGE2_LR=\"${STAGE2_LR:-2e-5}\"
+  export STAGE2_GRAD_ACCUM=\"${STAGE2_GRAD_ACCUM:-16}\"
   export OUTPUT_DIR=\"${OUTPUT_DIR:-${LAGUNA_VLM_ROOT}/checkpoints/${RUN_NAME}}\"
   export INIT_CHECKPOINT=\"${INIT_CHECKPOINT:-}\"
   export INIT_LORA_DIR=\"${INIT_LORA_DIR:-}\"
@@ -108,8 +129,9 @@ ssh "${SSH_OPTS[@]}" "${PRIME_SSH_TARGET}" "bash -lc '
   export HF_PRIVATE=\"${HF_PRIVATE:-1}\"
   export HF_PATH_IN_REPO=\"${HF_PATH_IN_REPO:-${RUN_NAME}}\"
   export TERMINATE_ON_EXIT=\"${TERMINATE_ON_EXIT:-0}\"
+  export TERMINATE_AFTER_STAGE2_FINAL=\"${TERMINATE_AFTER_STAGE2_FINAL:-0}\"
   export PRIME_POD_ID=\"${PRIME_POD_ID:-}\"
-  nohup bash scripts/prime_budget_training_job.sh > \"${LAGUNA_VLM_ROOT}/logs/${RUN_NAME}/launcher.log\" 2>&1 < /dev/null &
+  nohup bash \"${REMOTE_JOB_SCRIPT}\" > \"${LAGUNA_VLM_ROOT}/logs/${RUN_NAME}/launcher.log\" 2>&1 < /dev/null &
   echo \$! > \"${LAGUNA_VLM_ROOT}/logs/${RUN_NAME}/pid\"
   echo \"run_name=${RUN_NAME}\"
   echo \"pid=\$(cat \"${LAGUNA_VLM_ROOT}/logs/${RUN_NAME}/pid\")\"

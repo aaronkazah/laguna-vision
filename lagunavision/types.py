@@ -103,6 +103,8 @@ class EvalManifestItem:
     must_include: tuple[str, ...]
     accepted_fix_terms: tuple[str, ...]
     must_not_include: tuple[str, ...]
+    must_include_mode: str = "any"
+    max_answer_words: int = 0
     answer: str = ""
 
     @classmethod
@@ -119,6 +121,10 @@ class EvalManifestItem:
         if not id_value or not image_value or not question_value:
             raise ValueError("manifest rows require id, image, and question")
 
+        must_include_mode = str(row.get("must_include_mode", "any"))
+        if must_include_mode not in {"any", "all"}:
+            raise ValueError("must_include_mode must be 'any' or 'all'")
+
         return cls(
             id=str(id_value),
             image=root / str(image_value),
@@ -128,6 +134,8 @@ class EvalManifestItem:
             must_include=strings("must_include"),
             accepted_fix_terms=strings("accepted_fix_terms"),
             must_not_include=strings("must_not_include"),
+            must_include_mode=must_include_mode,
+            max_answer_words=int(row.get("max_answer_words", 0) or 0),
             answer=str(row.get("answer", "")),
         )
 

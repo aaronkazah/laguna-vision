@@ -26,6 +26,7 @@ class SpatialOcrExample:
     image: str
     question: str
     answer: str
+    labels: dict[str, str]
 
 
 def generate_spatial_ocr_manifest(output_dir: Path, count: int, seed: int = 7) -> tuple[SpatialOcrExample, ...]:
@@ -51,11 +52,13 @@ def _example(index: int, rng: random.Random) -> SpatialOcrExample:
     regions = ("top left", "top right", "bottom left", "bottom right")
     words = rng.sample(WORDS, 4)
     selected = rng.randrange(4)
+    labels = dict(zip(regions, words))
     return SpatialOcrExample(
         id=f"spatial_ocr_{index:04d}",
         image=f"images/spatial_ocr_{index:04d}.png",
         question=f"What word is in the {regions[selected]}?",
-        answer=words[selected],
+        answer=labels[regions[selected]],
+        labels=labels,
     )
 
 
@@ -64,15 +67,6 @@ def _write_image(path: Path, example: SpatialOcrExample) -> None:
         from PIL import Image, ImageDraw
     except ImportError as exc:
         raise RuntimeError("Install data dependencies with `python -m pip install -e '.[data]'`.") from exc
-
-    labels = {
-        "top left": WORDS[0],
-        "top right": WORDS[1],
-        "bottom left": WORDS[2],
-        "bottom right": WORDS[3],
-    }
-    selected_region = example.question.removeprefix("What word is in the ").removesuffix("?")
-    labels[selected_region] = example.answer
 
     image = Image.new("RGB", (640, 480), "white")
     draw = ImageDraw.Draw(image)
@@ -84,5 +78,5 @@ def _write_image(path: Path, example: SpatialOcrExample) -> None:
     }
     for region, box in boxes.items():
         draw.rectangle(box, outline="black", width=3)
-        draw.text((box[0] + 24, box[1] + 72), labels[region], fill="black")
+        draw.text((box[0] + 24, box[1] + 72), example.labels[region], fill="black")
     image.save(path)
