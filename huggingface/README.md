@@ -20,6 +20,8 @@ Method: **post-training multimodal adaptation via supervised fine-tuning**.
 
 Current status: `latest` is an early 200k-example checkpoint. It serves successfully but is weakly grounded: **12 / 80** strict passes on the live capability matrix.
 
+![Laguna Vision demo](assets/demo/lagunavision.gif)
+
 ## Vision pathway breakdown
 
 Laguna can generate text, but it has no native pixel input. This checkpoint adds the missing bridge from screen/image pixels into Laguna tokens.

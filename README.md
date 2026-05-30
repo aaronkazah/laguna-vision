@@ -8,6 +8,8 @@ This is **post-training multimodal adaptation via supervised fine-tuning**: Stag
 
 The current `latest/` checkpoint is an early 200k-example run. It is not a finished vision model. It is useful because the full path is inspectable: data recipe, manifests, training scripts, checkpoint lineage, endpoint code, and raw eval answers.
 
+![Laguna Vision demo](assets/demo/lagunavision.gif)
+
 ## Vision pathway breakdown
 
 Laguna can already generate text, but it has no sensor for pixels and no learned bridge from pixels into its token stream. Laguna Vision adds that missing interface end to end: pixels become SigLIP features, features become Laguna-space visual tokens, and the trained adapter is measured to see whether those tokens actually affect the answer.
